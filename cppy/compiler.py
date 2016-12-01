@@ -79,7 +79,7 @@ class CodeObject:
 
 
 class Function(CodeObject):
-    def __init__(self, func):
+    def __init__(self, func, for_class):
         super().__init__(
             name=func.__name__,
             doc=inspect.getdoc(func),
@@ -87,6 +87,7 @@ class Function(CodeObject):
         )
         self.func = func
         self.args = inspect.getargspec(self.func)
+        self.for_class = for_class
         # self.doc += "\n" + str(self.args)
 
     def get_cpp(self):
@@ -99,6 +100,7 @@ class Function(CodeObject):
     def render_cpp_declaration(self, prefix="", struct_name=None):
         s = """
     /* %(src_pos)s */
+    /* %(debug)s */
     static const char* %(prefix)s%(name)s_doc = "%(doc)s";
     static PyObject* %(prefix)s%(name)s(%(PyObject)s* self%(args)s)
     {
@@ -109,24 +111,39 @@ class Function(CodeObject):
                     "doc": to_c_string(self.doc),
                     "src_pos": self.src_pos, "code": self.get_cpp(),
                     "PyObject": "PyObject" if struct_name is None else struct_name,
-                    "args": self.get_args_data()[2]
+                    "args": self.get_args_data()[2],
+                    "debug": str(self.args)
                     }
 
     def get_args_data(self):
         if self.args.varargs and len(self.args.varargs):
-            return ("PyCFunction", "METH_VARARGS", ", PyObject* args, PyObject* kwargs",)
-        if self.args.args and len(self.args.args):
-            return ("PyCFunction", "METH_VARARGS", ", PyObject* args", )
+            return ("PyFunctionWithKeywords", "METH_VARARGS", ", PyObject* args, PyObject* kwargs",)
+
+        if self.for_class:
+            num_args = len(self.args.args)
+            if not num_args:
+                raise TypeError("class method %s has no parameters" % self.name)
+            if num_args == 1:
+                return ("PyCFunction", "METH_NOARGS", "",)
+            else:
+                return ("PyCFunction", "METH_VARARGS", ", PyObject* args",)
+
+        if len(self.args.args) == 1:
+            return ("PyCFunction", "METH_O", ", PyObject* arg", )
+        if len(self.args.args) > 1:
+            return ("PyCFunction", "METH_VARARGS", ", PyObject* args",)
+
         return ("PyNoArgsFunction", "METH_NOARGS", "")
 
 
     def render_cpp_struct_entry(self, prefix=""):
         args = self.get_args_data()
-        return """{ "%(name)s", reinterpret_cast<PyCFunction>(%(prefix)s%(name)s), %(args)s, %(prefix)s%(name)s_doc },
+        return """/* %(debug)s */{ "%(name)s", reinterpret_cast<PyCFunction>(%(prefix)s%(name)s), %(args)s, %(prefix)s%(name)s_doc },
 """ % {"name": self.name,
        "prefix": prefix,
        "args": args[1],
-       "func_type": args[0]
+       "func_type": args[0],
+       "debug": str(self.args)
        }
 
 
@@ -146,6 +163,12 @@ class Class(CodeObject):
     def append(self, o):
         if isinstance(o, Function):
             self.functions.append(o)
+
+    def has_function(self, name):
+        for i in self.functions:
+            if i.name == name:
+                return True
+        return False
 
     def render_cpp_declaration(self):
         code = ""
@@ -178,8 +201,8 @@ class Class(CodeObject):
         code %= {
             "name": self.name,
             "struct_name": self.struct_name,
-            "doc":to_c_string(self.doc),
-            "decl": "\n// decl" }
+            "doc": to_c_string(self.doc),
+            "decl": self.cpp }
         return code
 
     def render_method_struct(self):
@@ -208,6 +231,10 @@ class Class(CodeObject):
             "tp_new": "%s_new_func" % self.struct_name,
             "tp_init": "%s_init_func" % self.struct_name,
         })
+        if self.has_function("__str__"):
+            dic.update({ "tp_str": "%s%s" % (self.prefix, "__str__") })
+        if self.has_function("__repr__"):
+            dic.update({ "tp_repr": "%s%s" % (self.prefix, "__repr__") })
 
         code = """
 /* type definition for class %(name)s */
@@ -217,7 +244,7 @@ static PyTypeObject %(struct_name)s =
 """ % { "name": self.name, "struct_name":self.type_def_struct_name }
 
         for i in TYPE_STRUCT_MEMBER:
-            code += "    /* %(name)s */ static_cast<%(type)s>(%(val)s),\n" % {
+            code += "    /* %(name)s */ (%(type)s)(%(val)s),\n" % {
                 "name": i[1], "type": i[0], "val": dic.get(i[1])
             }
         code += "}; /* %s */\n" % self.type_def_struct_name
@@ -231,7 +258,7 @@ static PyTypeObject %(struct_name)s =
             PyObject_New(%(struct_name)s, &%(type_struct)s)
             );
     }
-    int %(struct_name)s_init_func(PyObject*, PyObject*, PyObject*) { }
+    int %(struct_name)s_init_func(PyObject*, PyObject*, PyObject*) { return 0; }
     /*void %(struct_name)s_copy_func(%(struct_name)s* other)
     {
         auto copy = reinterpret_cast<PyObject*>(
@@ -281,6 +308,7 @@ bool initialize_class_%(name)s(void* vmodule)
         }
         return code
 
+
 class Objects:
     def __init__(self, module):
         self.module = module
@@ -290,10 +318,16 @@ class Objects:
         self.struct_name = "cppy_module_%s" % self.name
         self.method_struct_name = "cppy_module_methods_%s" % self.name
         self.doc = inspect.getdoc(module)
+        self.doc = self.doc if self.doc else ""
         self.h_header=""
         self.h_footer=""
         self.cpp_header=""
         self.cpp_footer=""
+        self.cpp = ""
+        cpp = self.doc.split("_CPP_:")
+        if len(cpp) > 1:
+            self.doc = cpp[0]
+            self.cpp = cpp[1]
 
     def append(self, o):
         if isinstance(o, Function):
@@ -345,11 +379,16 @@ bool initialize_module_%(name)s();
 #include <iostream>
 #define CPPY_ERROR(arg__) { std::cerr << arg__ << std::endl; }
 
+%(decl)s
+
 %(header)s
 
 namespace {
 """
-        code %= {"header":self.cpp_header }
+        code %= {
+            "header": self.cpp_header,
+            "decl": self.cpp
+        }
 
         if self.functions:
             code += "\n/* #################### global functions ##################### */\n\n"
@@ -491,7 +530,7 @@ class _compiler:
     def inspect_function(self, func, class_obj=None):
         self.log("inspecting function %s" % func)
         self.push_scope(func.__name__)
-        o = Function(func)
+        o = Function(func, class_obj)
         if class_obj is None:
             self.objects.append(o)
         else:
