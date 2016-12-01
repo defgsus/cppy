@@ -64,12 +64,19 @@ class CodeObject:
         self.name = name
         self.doc = doc if doc else ""
         self.src_pos = src_pos
+        self.cpp = ""
+
+        cpp = self.doc.split("_CPP_:")
+        if len(cpp) > 1:
+            self.doc = cpp[0]
+            self.cpp = cpp[1]
 
     def __str__(self):
         return "%s" % self.name
 
     def render_cpp_declaration(self):
         raise NotImplementedError
+
 
 class Function(CodeObject):
     def __init__(self, func):
@@ -79,7 +86,8 @@ class Function(CodeObject):
             src_pos="%s:%d" % (func.__code__.co_filename, func.__code__.co_firstlineno),
         )
         self.func = func
-        self.cpp = None
+        self.args = inspect.getargspec(self.func)
+        # self.doc += "\n" + str(self.args)
 
     def get_cpp(self):
         if not self.cpp:
@@ -92,7 +100,7 @@ class Function(CodeObject):
         s = """
     /* %(src_pos)s */
     static const char* %(prefix)s%(name)s_doc = "%(doc)s";
-    static PyObject* %(prefix)s%(name)s(%(PyObject)s* self, PyObject* args)
+    static PyObject* %(prefix)s%(name)s(%(PyObject)s* self%(args)s)
     {
         %(code)s
     }
@@ -100,21 +108,40 @@ class Function(CodeObject):
         return s % {"prefix":prefix, "name":self.name,
                     "doc": to_c_string(self.doc),
                     "src_pos": self.src_pos, "code": self.get_cpp(),
-                    "PyObject": "PyObject" if struct_name is None else struct_name }
+                    "PyObject": "PyObject" if struct_name is None else struct_name,
+                    "args": self.get_args_data()[2]
+                    }
+
+    def get_args_data(self):
+        if self.args.varargs and len(self.args.varargs):
+            return ("PyCFunction", "METH_VARARGS", ", PyObject* args, PyObject* kwargs",)
+        if self.args.args and len(self.args.args):
+            return ("PyCFunction", "METH_VARARGS", ", PyObject* args", )
+        return ("PyNoArgsFunction", "METH_NOARGS", "")
+
 
     def render_cpp_struct_entry(self, prefix=""):
-        return '{ "%(name)s", (PyCFunction)%(prefix)s%(name)s, %(args)s, %(prefix)s%(name)s_doc },\n' % {
-            "name":self.name, "prefix":prefix, "args":"METH_VARARGS"}
+        args = self.get_args_data()
+        return """{ "%(name)s", reinterpret_cast<PyCFunction>(%(prefix)s%(name)s), %(args)s, %(prefix)s%(name)s_doc },
+""" % {"name": self.name,
+       "prefix": prefix,
+       "args": args[1],
+       "func_type": args[0]
+       }
 
 
 class Class(CodeObject):
-    def __init__(self, name, doc=""):
-        super().__init__(name=name, doc=doc)
+    def __init__(self, the_class):
+        super().__init__(
+            name=the_class.__name__,
+            doc=inspect.getdoc(the_class)
+        )
+        self.the_class = the_class
         self.functions = []
-        self.prefix = "cppy_classdef_%s_" % name
-        self.struct_name = "cppy_class_struct_%s" % name
-        self.method_struct_name = "cppy_method_def_%s" % name
-        self.type_def_struct_name = "cppy_type_def_%s" % name
+        self.prefix = "cppy_classdef_%s_" % self.name
+        self.struct_name = "cppy_class_struct_%s" % self.name
+        self.method_struct_name = "cppy_method_def_%s" % self.name
+        self.type_def_struct_name = "cppy_type_def_%s" % self.name
 
     def append(self, o):
         if isinstance(o, Function):
@@ -162,12 +189,15 @@ class Class(CodeObject):
         code += "\n    { NULL, NULL, 0, NULL }\n};\n"
         return code
 
+    def scoped_name(self):
+        return "%s.%s" % (self.the_class, self.name)
+
     def render_type_struct(self):
         dic = {}
         for i in TYPE_STRUCT_MEMBER:
             dic[i[1]] = "NULL"
         dic.update({
-            "tp_name": '"%s"' % self.name,
+            "tp_name": '"%s"' % self.scoped_name(),
             "tp_basicsize": "sizeof(%s)" % self.struct_name,
             "tp_dealloc": "%s_dealloc" % self.struct_name,
             "tp_getattro": "PyObject_GenericGetAttr",
@@ -471,10 +501,7 @@ class _compiler:
     def inspect_class(self, cls):
         self.log("inspecting class %s" % cls)
         self.push_scope(cls.__name__)
-        class_obj = Class(
-            name = cls.__name__,
-            doc=inspect.getdoc(cls),
-        )
+        class_obj = Class(cls)
         #for i in inspect.getmembers(cls):
         #    print(i)
         for n, mem in inspect.getmembers(cls):

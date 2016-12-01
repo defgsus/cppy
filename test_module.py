@@ -12,9 +12,10 @@ def func_a():
     """
     Returns 1.
     :return: float
+    _CPP_:
+    return PyFloat_FromDouble(444.);
     """
     return 1.
-
 
 def func_add(a, b):
     """
@@ -36,7 +37,9 @@ class Abel:
         return member == other.member
     @property
     def amazingness(self):
+        "This property is amazing"
         return 10.
+
 
 class Kain(Abel):
     """
@@ -44,5 +47,6 @@ class Kain(Abel):
     """
     member = 2.
     def slay(self):
+        "Slays Abel"
         pass
 
