@@ -1,3 +1,8 @@
+# c++
+*.cpp
+*.hpp
+*.h
+
 # intellij/pycharm
 .idea/
 

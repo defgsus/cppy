@@ -1,4 +1,9 @@
 
+__doc__ = """
+Test module desc.
+Bladiblubb
+"""
+
 CONSTANT1 = 1
 CONSTANT2 = 2
 

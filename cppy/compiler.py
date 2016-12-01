@@ -1,4 +1,5 @@
 import inspect
+import datetime
 
 TYPE_STRUCT_MEMBER = [
     ("const char*", "tp_name"),
@@ -50,6 +51,14 @@ TYPE_STRUCT_MEMBER = [
     ("destructor", "tp_finalize")
 ]
 
+
+def to_c_string(text):
+    text = text.replace("\n", "\\n")
+    text = text.replace("\r", "")
+    text = text.replace('"', '\\"')
+    return text
+
+
 class CodeObject:
     def __init__(self, name, doc="", src_pos=""):
         self.name = name
@@ -74,21 +83,22 @@ class Function(CodeObject):
 
     def get_cpp(self):
         if not self.cpp:
-            return "#error Not implemented"
+            # return "#error %s not implemented" % self.name
+            return "return PyLong_FromLong(23);"
         else:
             return self.cpp
 
     def render_cpp_declaration(self, prefix="", struct_name=None):
         s = """
     /* %(src_pos)s */
-    static const char* %(prefix)s%(name)s_doc = "%(doc)s"
+    static const char* %(prefix)s%(name)s_doc = "%(doc)s";
     static PyObject* %(prefix)s%(name)s(%(PyObject)s* self, PyObject* args)
     {
         %(code)s
     }
     """
         return s % {"prefix":prefix, "name":self.name,
-                    "doc": self.doc.replace("\n", "\\n").replace("\r", ""),
+                    "doc": to_c_string(self.doc),
                     "src_pos": self.src_pos, "code": self.get_cpp(),
                     "PyObject": "PyObject" if struct_name is None else struct_name }
 
@@ -118,34 +128,38 @@ class Class(CodeObject):
             code += i.render_cpp_declaration(prefix=self.prefix, struct_name=self.struct_name)
         code += "\n" + self.render_method_struct()
         code += "\n" + self.render_type_struct()
+        code += "\n" + self.render_ctor_impl()
         code += '\n} // extern "C"\n'
+        code += "\n" + self.render_init_func()
 
         return code
 
     def render_struct(self):
         code = """
-    struct %(name)s
+    /* base class definition for class '%(name)s' */
+    struct %(struct_name)s
     {
         PyObject_HEAD
         %(decl)s
-
-        static %(name)s* new_func();
-        static %(name)s* copy_func(%(name)s*);
-        static void dealloc(%(name)s* self)
-        {
-            self->ob_base.ob_type->tp_free(reinterpret_cast<PyObject*>(self));
-        }
-        static const char* doc_string = "%(doc)s";
     };
+    static const char* %(struct_name)s_doc_string = "%(doc)s";
+    static PyObject* %(struct_name)s_new_func(struct _typeobject *, PyObject *, PyObject *);
+    static int %(struct_name)s_init_func(PyObject*, PyObject*, PyObject*);
+    //static void %(struct_name)s_copy_func(%(struct_name)s*);
+    static void %(struct_name)s_dealloc(PyObject* self);
 """
-        code %= { "name": self.struct_name, "doc":self.doc, "decl": "// decl" }
+        code %= {
+            "name": self.name,
+            "struct_name": self.struct_name,
+            "doc":to_c_string(self.doc),
+            "decl": "\n// decl" }
         return code
 
     def render_method_struct(self):
         code = "static PyMethodDef %s[] =\n{\n" % self.method_struct_name
         for i in self.functions:
             code += "    " + i.render_cpp_struct_entry(self.prefix)
-        code += "\n    { NULL, NULL, 0, NULL }\n}"
+        code += "\n    { NULL, NULL, 0, NULL }\n};\n"
         return code
 
     def render_type_struct(self):
@@ -155,17 +169,23 @@ class Class(CodeObject):
         dic.update({
             "tp_name": '"%s"' % self.name,
             "tp_basicsize": "sizeof(%s)" % self.struct_name,
-            "tp_dealloc": "%s::dealloc" % self.struct_name,
+            "tp_dealloc": "%s_dealloc" % self.struct_name,
             "tp_getattro": "PyObject_GenericGetAttr",
             "tp_setattro": "PyObject_GenericSetAttr",
             "tp_flags": "Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE",
-            "tp_doc": "%s::doc_string" % self.struct_name,
+            "tp_doc": "%s_doc_string" % self.struct_name,
             "tp_methods": self.method_struct_name,
-            "tp_new": "%s::new_func" % self.struct_name,
-            "tp_init": "%s::init_func" % self.struct_name,
+            "tp_new": "%s_new_func" % self.struct_name,
+            "tp_init": "%s_init_func" % self.struct_name,
         })
 
-        code = "static PyTypeObject %s =\n{\n    PyVarObject_HEAD_INIT(NULL, 0),\n" % self.type_def_struct_name
+        code = """
+/* type definition for class %(name)s */
+static PyTypeObject %(struct_name)s =
+{
+    PyVarObject_HEAD_INIT(NULL, 0)
+""" % { "name": self.name, "struct_name":self.type_def_struct_name }
+
         for i in TYPE_STRUCT_MEMBER:
             code += "    /* %(name)s */ static_cast<%(type)s>(%(val)s),\n" % {
                 "name": i[1], "type": i[0], "val": dic.get(i[1])
@@ -173,15 +193,77 @@ class Class(CodeObject):
         code += "}; /* %s */\n" % self.type_def_struct_name
         return code
 
+    def render_ctor_impl(self):
+        code = """
+    PyObject* %(struct_name)s_new_func(struct _typeobject *, PyObject *, PyObject *)
+    {
+        return reinterpret_cast<PyObject*>(
+            PyObject_New(%(struct_name)s, &%(type_struct)s)
+            );
+    }
+    int %(struct_name)s_init_func(PyObject*, PyObject*, PyObject*) { }
+    /*void %(struct_name)s_copy_func(%(struct_name)s* other)
+    {
+        auto copy = reinterpret_cast<PyObject*>(
+            PyObject_New(%(struct_name)s, &%(type_struct)s)
+            );
+        // decl
+        return copy
+    }*/
+    void %(struct_name)s_dealloc(PyObject* self)
+    {
+        self->ob_type->tp_free(self);
+    }
+"""
+        code %= {
+            "name": self.name,
+            "struct_name": self.struct_name,
+            "type_struct": self.type_def_struct_name
+        }
+        return code
+
+    def render_init_func(self):
+        code = """
+bool initialize_class_%(name)s(void* vmodule)
+{
+    PyObject* module = reinterpret_cast<PyObject*>(vmodule);
+
+    if (0 != PyType_Ready(&%(struct_name)s))
+    {
+        CPPY_ERROR("Failed to readify class %(name)s for Python 3.4 module");
+        return false;
+    }
+
+    PyObject* object = reinterpret_cast<PyObject*>(&%(struct_name)s);
+    Py_INCREF(object);
+    if (0 != PyModule_AddObject(module, "%(name)s", object))
+    {
+        Py_DECREF(object);
+        CPPY_ERROR("Failed to add class %(name)s to Python 3.4 module");
+        return false;
+    }
+    return true;
+}
+"""
+        code %= {
+            "name": self.name,
+            "struct_name": self.type_def_struct_name
+        }
+        return code
 
 class Objects:
     def __init__(self, module):
+        self.module = module
         self.functions = []
         self.classes = []
         self.name = module.__name__
         self.struct_name = "cppy_module_%s" % self.name
         self.method_struct_name = "cppy_module_methods_%s" % self.name
         self.doc = inspect.getdoc(module)
+        self.h_header=""
+        self.h_footer=""
+        self.cpp_header=""
+        self.cpp_footer=""
 
     def append(self, o):
         if isinstance(o, Function):
@@ -197,11 +279,33 @@ class Objects:
         for i in self.classes:
             print(i)
 
-    def render_cpp_to_file(self, filename):
-        code = self.render_cpp()
+    @classmethod
+    def write_to_file(self, filename, code):
         import codecs
         with codecs.open(filename, "w", "utf-8") as file:
             file.write(code)
+
+    def render_hpp(self):
+        code = """
+/* generated by cppy on %(date)s */
+
+%(header)s
+
+%(init_types)s
+
+/* Call this before Py_Initialize() */
+bool initialize_module_%(name)s();
+
+%(footer)s
+"""
+        init_types = ""
+        for i in self.classes:
+            init_types += "bool initialize_class_%s(void* pyObject_module);\n" % i.name
+        code %= { "name":self.name, "header":self.h_header, "footer":self.h_footer,
+                  "date":datetime.datetime.now(),
+                  "init_types":init_types}
+        return code
+
 
     def render_cpp(self):
         code = """
@@ -211,27 +315,12 @@ class Objects:
 #include <iostream>
 #define CPPY_ERROR(arg__) { std::cerr << arg__ << std::endl; }
 
-bool cppy_init_python_object(PyObject* module, PyTypeObject* type, const char* name)
-{
-    if (0 != PyType_Ready(type))
-    {
-        CPPY_ERROR("Failed to readify " << name << " for Python 3.4");
-        return false;
-    }
-
-    PyObject* object = reinterpret_cast<PyObject*>(type);
-    Py_INCREF(object);
-    if (0 != PyModule_AddObject(module, name, object))
-    {
-        Py_DECREF(object);
-        CPPY_ERROR("Failed to add " << name << " to Python 3.4 module");
-        return false;
-    }
-    return true;
-}
+%(header)s
 
 namespace {
 """
+        code %= {"header":self.cpp_header }
+
         if self.functions:
             code += "\n/* #################### global functions ##################### */\n\n"
             code += 'extern "C" {\n'
@@ -245,15 +334,52 @@ namespace {
                 code += "\n/* #################### class %s ##################### */\n\n" % i.name
                 code += i.render_cpp_declaration()
 
-        code += """
+        code += '\nextern "C" {\n'
+        code += self.render_module_def()
+        code += '} // extern "C"\n'
+        code += "\n} // namespace\n"
+        code += "\n" + self.render_module_init()
+        code += "\n" + self.cpp_footer
+        return code
+
+    def render_module_init(self):
+        code = """
+namespace {
+    PyMODINIT_FUNC create_module_func()
+    {
+        auto module = PyModule_Create(&%(module_def)s);
+        if (!module)
+            return nullptr;
+
+        // add the classes
+%(init_calls)s
+
+        return module;
+    }
 } // namespace
 
+bool initialize_module_%(name)s()
+{
+    PyImport_AppendInittab("%(name)s", create_module_func);
+    return true;
+}
 """
+        init_calls = ""
+        for i in self.classes:
+            init_calls += "        initialize_class_%s(module);\n" % i.name
+
+        code %= {
+            "name": self.name,
+            "module_def": self.struct_name,
+            "init_calls": init_calls
+        }
+
         return code
 
     def render_module_def(self):
         code = """
-        static const char* %(doc_name)s = "%doc";
+        static const char* %(doc_name)s = "%(doc)s";
+        /* module definition for '%(name)s' */
         static PyModuleDef %(struct_name)s =
         {
             PyModuleDef_HEAD_INIT,
@@ -266,24 +392,27 @@ namespace {
             nullptr, /* m_clear */
             nullptr, /* m_free */
         };
-        """
-        code %= { "name": self.name,
+        """ % { "name": self.name,
+                  "struct_name": self.struct_name,
                   "doc_name": "%s_doc" % self.struct_name,
                   "func_struct": self.method_struct_name,
-                  "doc": self.doc }
+                  "doc": to_c_string(self.doc) }
         return code
 
     def render_method_struct(self):
         code = "static PyMethodDef %s[] =\n{\n" % self.method_struct_name
         for i in self.functions:
             code += "    " + i.render_cpp_struct_entry()
-        code += "\n    { NULL, NULL, 0, NULL }\n}"
+        code += "\n    { NULL, NULL, 0, NULL }\n};\n"
         return code
 
 
 
 class _compiler:
-
+    """
+    Class responsible to traverse a module and it's members
+    and to generate an Objects instance from it
+    """
     def __init__(self):
         self.scope_stack = []
 
