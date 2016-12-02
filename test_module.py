@@ -50,14 +50,12 @@ class Abel:
 
     def __repr__(self):
         """
-
         _CPP_:
         return fromString(QString("Abel(%1, %2, %3, %4)")
             .arg(self->v[0]).arg(self->v[1]).arg(self->v[2]).arg(self->v[3]) );
         """
     def __str__(self):
         """
-
         _CPP_:
         return fromString(QString("Abel(%1, %2, %3, %4)")
             .arg(self->v[0]).arg(self->v[1]).arg(self->v[2]).arg(self->v[3]) );
@@ -98,6 +96,15 @@ class Abel:
         """
         return self
 
+    def get(self):
+        """
+        Returns the contents as float list of length 4
+        _CPP_:
+        auto list = PyList_New(4);
+        for (int i=0; i<4; ++i)
+            PyList_SetItem(list, i, PyFloat_FromDouble(self->v[i]));
+        return list;
+        """
 
 class Kain(Abel):
     """
