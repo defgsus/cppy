@@ -110,6 +110,7 @@ SPECIAL_FUNCS = [
 
 # otherwise PyObject*
 SPECIAL_RETURN_TYPES = {
+    "__init__": "int",
     "__len__": "Py_ssize_t",
     "__setitem__": "int",
 }
@@ -296,7 +297,7 @@ class Class(CodeObject):
     };
     static const char* %(struct_name)s_doc_string = "%(doc)s";
     static PyObject* %(struct_name)s_new_func(struct _typeobject *, PyObject *, PyObject *);
-    static int %(struct_name)s_init_func(PyObject*, PyObject*, PyObject*);
+    //static int %(struct_name)s_init_func(PyObject*, PyObject*, PyObject*);
     //static void %(struct_name)s_copy_func(%(struct_name)s*);
     static void %(struct_name)s_dealloc(PyObject* self);
 """
@@ -337,7 +338,7 @@ class Class(CodeObject):
             "tp_doc": "%s_doc_string" % self.struct_name,
             "tp_methods": self.method_struct_name,
             "tp_new": "%s_new_func" % self.struct_name,
-            "tp_init": "%s_init_func" % self.struct_name,
+            # "tp_init": "%s_init_func" % self.struct_name,
         })
         for i in SPECIAL_FUNCS:
             if self.has_function(i[0]):
@@ -428,7 +429,7 @@ class Class(CodeObject):
             PyObject_New(%(struct_name)s, &%(type_struct)s)
             );
     }
-    int %(struct_name)s_init_func(PyObject*, PyObject*, PyObject*) { return 0; }
+    //int %(struct_name)s_init_func(PyObject*, PyObject*, PyObject*) { return 0; }
     /*void %(struct_name)s_copy_func(%(struct_name)s* other)
     {
         auto copy = reinterpret_cast<PyObject*>(

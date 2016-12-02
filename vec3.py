@@ -89,14 +89,27 @@ namespace {
         return true;
     }
 
+    bool is_vec3(PyObject* obj);
+    PyObject* new_vec3();
     PyObject* vec3_set(cppy_class_struct_vec3* self, PyObject* args);
-    PyObject* vec3_binary_op(cppy_class_struct_vec3* self, PyObject* args, std::function<void(double,double)> op);
+    PyObject* vec3_binary_op_inplace(cppy_class_struct_vec3* self, PyObject* arg, std::function<double(double,double)> op);
+    PyObject* vec3_binary_op_copy(PyObject* left, PyObject* right, std::function<double(double,double)> op);
 
 } // namespace
 } // namespace PYTHON34
 } // namespace MO
 
 _CPP_:
+    bool is_vec3(PyObject* obj)
+    {
+        return PyObject_TypeCheck(obj, &cppy_type_def_vec3);
+    }
+
+    PyObject* new_vec3()
+    {
+        return cppy_class_struct_vec3_new_func(NULL,NULL,NULL);
+    }
+
     PyObject* vec3_set(cppy_class_struct_vec3* self, PyObject* args)
     {
         PyObject* arg = nullptr;
@@ -118,8 +131,86 @@ _CPP_:
         Py_RETURN_SELF;
     }
 
-    PyObject* vec3_binary_op(cppy_class_struct_vec3* self, PyObject* args, std::function<void(double,double)> op)
+    PyObject* vec3_binary_op_copy(PyObject* left, PyObject* right, std::function<double(double,double)> op)
     {
+        bool reverse = false;
+        if (!is_vec3(left))
+        {
+            reverse = true;
+            std::swap(left, right);
+            if (!is_vec3(left))
+            {
+                PyErr_Set(PyExc_TypeError, QString("Wrong arguments to binary operator, %1 and %2")
+                                            .arg(typeName(left)).arg(typeName(right)));
+                return NULL;
+            }
+        }
+        if (!left)
+        {
+            PyErr_Set(PyExc_TypeError, QString("Null argument to operator"));
+            return NULL;
+        }
+        auto self = (cppy_class_struct_vec3*)left;
+        auto ret = (cppy_class_struct_vec3*)new_vec3();
+        double v;
+        if (to_float(right, &v))
+        {
+            if (!reverse)
+            {
+                ret->v[0] = op(self->v[0], v);
+                ret->v[1] = op(self->v[1], v);
+                ret->v[2] = op(self->v[2], v);
+            }
+            else
+            {
+                ret->v[0] = op(v, self->v[0]);
+                ret->v[1] = op(v, self->v[1]);
+                ret->v[2] = op(v, self->v[2]);
+            }
+            return (PyObject*)ret;
+        }
+        double vec[3];
+        if (!expect_float_sequence(right, vec, 3))
+        {
+            Py_DECREF(ret);
+            return NULL;
+        }
+        if (!reverse)
+        {
+            ret->v[0] = op(self->v[0], vec[0]);
+            ret->v[1] = op(self->v[1], vec[1]);
+            ret->v[2] = op(self->v[2], vec[2]);
+        }
+        else
+        {
+            ret->v[0] = op(vec[0], self->v[0]);
+            ret->v[1] = op(vec[1], self->v[1]);
+            ret->v[2] = op(vec[2], self->v[2]);
+        }
+        return (PyObject*)ret;
+    }
+
+    PyObject* vec3_binary_op_inplace(cppy_class_struct_vec3* self, PyObject* right, std::function<double(double,double)> op)
+    {
+        if (!self)
+        {
+            PyErr_Set(PyExc_TypeError, QString("Null argument to operator"));
+            return NULL;
+        }
+        double v;
+        if (to_float(right, &v))
+        {
+            self->v[0] = op(self->v[0], v);
+            self->v[1] = op(self->v[1], v);
+            self->v[2] = op(self->v[2], v);
+            Py_RETURN_SELF;
+        }
+        double vec[3];
+        if (!expect_float_sequence(right, vec, 3))
+            return NULL;
+        self->v[0] = op(self->v[0], vec[0]);
+        self->v[1] = op(self->v[1], vec[1]);
+        self->v[2] = op(self->v[2], vec[2]);
         Py_RETURN_SELF;
     }
 
@@ -138,7 +229,12 @@ class vec3:
     def __init__(self, arg=None):
         """
         _CPP_:
-        return vec3_set(self, args);
+        if (auto o = vec3_set(self, args))
+        {
+            Py_DECREF(o);
+            return 0;
+        }
+        return 1;
         """
         if arg is None:
             self.v = [0., 0., 0.]
@@ -249,28 +345,44 @@ class vec3:
     def __add__(self, arg):
         """
         _CPP_:
-        return vec3_binary_op(self, args, [](double l, double r){ return l + r; });
+        return vec3_binary_op_copy((PyObject*)self, args, [](double l, double r){ return l + r; });
         """
         return self._binary_operator(arg, lambda l, r: l + r)
 
     def __radd__(self, arg):
-        return self._binary_operator(arg, lambda r, l: l + r)
+        return self._binary_operator_inplace(arg, lambda r, l: l + r)
 
     def __iadd__(self, arg):
+        """
+        _CPP_:
+        return vec3_binary_op_inplace(self, args, [](double l, double r){ return l + r; });
+        """
         return self._binary_operator_inplace(arg, lambda l, r: l + r)
 
 
     def __sub__(self, arg):
+        """
+        _CPP_:
+        return vec3_binary_op_copy((PyObject*)self, args, [](double l, double r){ return l - r; });
+        """
         return self._binary_operator(arg, lambda l, r: l - r)
 
     def __rsub__(self, arg):
         return self._binary_operator(arg, lambda r, l: l - r)
 
     def __isub__(self, arg):
+        """
+        _CPP_:
+        return vec3_binary_op_inplace(self, args, [](double l, double r){ return l - r; });
+        """
         return self._binary_operator_inplace(arg, lambda l, r: l - r)
 
 
     def __mul__(self, arg):
+        """
+        _CPP_:
+        return vec3_binary_op_copy((PyObject*)self, args, [](double l, double r){ return l * r; });
+        """
         return self._binary_operator(arg, lambda l, r: l * r)
 
     def __rmul__(self, arg):
@@ -281,6 +393,10 @@ class vec3:
 
 
     def __truediv__(self, arg):
+        """
+        _CPP_:
+        return vec3_binary_op_copy((PyObject*)self, args, [](double l, double r){ return l / r; });
+        """
         return self._binary_operator(arg, lambda l, r: l / r)
 
     def __rtruediv__(self, arg):
