@@ -9,8 +9,7 @@ def doit():
     import vec3
     objs = cppy.compiler.compile(vec3)
 
-    objs.dump()
-
+    objs.context.dump()
 
     objs.namespaces = ["MO", "PYTHON34"]
 
