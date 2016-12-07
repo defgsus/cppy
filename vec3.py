@@ -10,8 +10,6 @@ namespace MO {
 namespace PYTHON34 {
 namespace {
 
-    //struct cppy_class_struct_vec3;
-
     #define Py_RETURN_SELF { Py_INCREF(self); return reinterpret_cast<PyObject*>(self); }
 
     bool check_index(Py_ssize_t index, Py_ssize_t len)
@@ -91,9 +89,10 @@ namespace {
 
     bool is_vec3(PyObject* obj);
     PyObject* new_vec3();
-    PyObject* vec3_set(cppy_class_struct_vec3* self, PyObject* args);
-    PyObject* vec3_binary_op_inplace(cppy_class_struct_vec3* self, PyObject* arg, std::function<double(double,double)> op);
+    PyObject* vec3_set($STRUCT(vec3)* self, PyObject* args);
+    PyObject* vec3_binary_op_inplace($STRUCT(vec3)* self, PyObject* arg, std::function<double(double,double)> op);
     PyObject* vec3_binary_op_copy(PyObject* left, PyObject* right, std::function<double(double,double)> op);
+    PyObject* vec3_unary_op_inplace($STRUCT(vec3)* self, std::function<double(double)> op);
 
 } // namespace
 } // namespace PYTHON34
@@ -102,15 +101,15 @@ namespace {
 _CPP_:
     bool is_vec3(PyObject* obj)
     {
-        return PyObject_TypeCheck(obj, &cppy_type_def_vec3);
+        return PyObject_TypeCheck(obj, &$TYPE_STRUCT(vec3));
     }
 
     PyObject* new_vec3()
     {
-        return cppy_class_struct_vec3_new_func(NULL,NULL,NULL);
+        return $STRUCT(vec3)_new_func(NULL,NULL,NULL);
     }
 
-    PyObject* vec3_set(cppy_class_struct_vec3* self, PyObject* args)
+    PyObject* vec3_set($STRUCT(vec3)* self, PyObject* args)
     {
         PyObject* arg = nullptr;
         if (!PyArg_ParseTuple(args, "|O", &arg))
@@ -150,8 +149,8 @@ _CPP_:
             PyErr_Set(PyExc_TypeError, QString("Null argument to operator"));
             return NULL;
         }
-        auto self = (cppy_class_struct_vec3*)left;
-        auto ret = (cppy_class_struct_vec3*)new_vec3();
+        auto self = ($STRUCT(vec3)*)left;
+        auto ret = ($STRUCT(vec3)*)new_vec3();
         double v;
         if (to_float(right, &v))
         {
@@ -190,7 +189,7 @@ _CPP_:
         return (PyObject*)ret;
     }
 
-    PyObject* vec3_binary_op_inplace(cppy_class_struct_vec3* self, PyObject* right, std::function<double(double,double)> op)
+    PyObject* vec3_binary_op_inplace($STRUCT(vec3)* self, PyObject* right, std::function<double(double,double)> op)
     {
         if (!self)
         {
@@ -214,6 +213,14 @@ _CPP_:
         Py_RETURN_SELF;
     }
 
+    PyObject* vec3_unary_op_inplace($STRUCT(vec3)* self, std::function<double(double)> op)
+    {
+        self->v[0] = op(self->v[0]);
+        self->v[1] = op(self->v[1]);
+        self->v[2] = op(self->v[2]);
+        Py_RETURN_SELF;
+    }
+
 """
 
 class vec3:
@@ -224,6 +231,10 @@ class vec3:
     typically of length 3 as well, containing float-convertible elements
     _CPP_:
     double v[3];
+    double length() const
+    {
+        return std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+    }
     """
 
     def __init__(self, arg=None):
@@ -316,6 +327,18 @@ class vec3:
     # --- boolean equality ---
 
     def __eq__(self, other):
+        """
+        :param other: float sequence of length 3
+        :return: True or False
+        _CPP_:
+        double v[3];
+        if (!expect_float_sequence(args, v, 3))
+            return NULL;
+        for (int i=0; i<3; ++i)
+            if (self->v[i] != v[i])
+                Py_RETURN_FALSE;
+        Py_RETURN_TRUE;
+        """
         if isinstance(other, vec3):
             return self.v == other.v
         tools.check_float_sequence(other)
@@ -389,6 +412,10 @@ class vec3:
         return self._binary_operator(arg, lambda r, l: l * r)
 
     def __imul__(self, arg):
+        """
+        _CPP_:
+        return vec3_binary_op_inplace(self, args, [](double l, double r){ return l * r; });
+        """
         return self._binary_operator_inplace(arg, lambda l, r: l * r)
 
 
@@ -403,16 +430,28 @@ class vec3:
         return self._binary_operator(arg, lambda r, l: l / r)
 
     def __itruediv__(self, arg):
+        """
+        _CPP_:
+        return vec3_binary_op_inplace(self, args, [](double l, double r){ return l / r; });
+        """
         return self._binary_operator_inplace(arg, lambda l, r: l / r)
 
 
     def __mod__(self, arg):
+        """
+        _CPP_:
+        return vec3_binary_op_copy((PyObject*)self, args, [](double l, double r){ return std::fmod(l,r); });
+        """
         return self._binary_operator(arg, lambda l, r: l % r)
 
     def __rmod__(self, arg):
         return self._binary_operator(arg, lambda r, l: l % r)
 
     def __imod__(self, arg):
+        """
+        _CPP_:
+        return vec3_binary_op_inplace(self, args, [](double l, double r){ return std::fmod(l,r); });
+        """
         return self._binary_operator_inplace(arg, lambda l, r: l % r)
 
     # --- op helper ---
@@ -480,6 +519,8 @@ class vec3:
         5.0
         >>> vec3(1).length() == math.sqrt(3.)
         True
+        _CPP_:
+        return PyFloat_FromDouble(std::sqrt(self->v[0]*self->v[0] + self->v[1]*self->v[1] + self->v[2]*self->v[2]));
         """
         return math.sqrt(sum([x*x for x in self.v]))
 
@@ -491,6 +532,8 @@ class vec3:
         25.0
         >>> vec3(1).length_squared()
         3.0
+        _CPP_:
+        return PyFloat_FromDouble(self->v[0]*self->v[0] + self->v[1]*self->v[1] + self->v[2]*self->v[2]);
         """
         return sum([x*x for x in self.v])
 
@@ -503,6 +546,14 @@ class vec3:
         5.0
         >>> vec3(1).distance(vec3(2)) == math.sqrt(3)
         True
+        _CPP_:
+        double v[3];
+        if (!expect_float_sequence(args, v, 3))
+            return NULL;
+        v[0] -= self->v[0];
+        v[1] -= self->v[1];
+        v[2] -= self->v[2];
+        return PyFloat_FromDouble(std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]));
         """
         return math.sqrt(sum([(x-arg3[i])*(x-arg3[i]) for i, x in enumerate(self.v)]))
 
@@ -515,6 +566,14 @@ class vec3:
         25.0
         >>> vec3(1).distance_squared(vec3(2))
         3.0
+        _CPP_:
+        double v[3];
+        if (!expect_float_sequence(args, v, 3))
+            return NULL;
+        v[0] -= self->v[0];
+        v[1] -= self->v[1];
+        v[2] -= self->v[2];
+        return PyFloat_FromDouble(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
         """
         return sum([(x-arg3[i])*(x-arg3[i]) for i, x in enumerate(self.v)])
 
@@ -525,6 +584,11 @@ class vec3:
         :return: float
         >>> vec3((1,2,3)).dot((4,5,6)) # (1*4)+(2*5)+(3*6)
         32.0
+        _CPP_:
+        double v[3];
+        if (!expect_float_sequence(args, v, 3))
+            return NULL;
+        return PyFloat_FromDouble(self->v[0]*v[0] + self->v[1]*v[1] + self->v[2]*v[2]);
         """
         tools.check_float_sequence(arg3, len(self))
         return sum([x * float(arg3[i]) for i, x in enumerate(self.v)])
@@ -540,6 +604,8 @@ class vec3:
         vec3(0, 1, 2)
         >>> vec3((-1.1, -1.9, -0.9)).floor()
         vec3(-2, -2, -1)
+        _CPP_:
+        return vec3_unary_op_inplace(self, [](double v){ return std::floor(v); });
         """
         self.v = [math.floor(x) for x in self.v]
         return self
@@ -552,6 +618,8 @@ class vec3:
         vec3(0, 2, 3)
         >>> vec3((-1.1, -1.9, -0.9)).round()
         vec3(-1, -2, -1)
+        _CPP_:
+        return vec3_unary_op_inplace(self, [](double v){ return std::floor(v+.5); });
         """
         self.v = [math.floor(x+.5) for x in self.v]
         return self
@@ -564,6 +632,9 @@ class vec3:
         vec3(0.707107, 0.707107, 0)
         >>> vec3((1,2,3)).normalize().length() == 1
         True
+        _CPP_:
+        double l = self->length();
+        return vec3_unary_op_inplace(self, [=](double v){ return v / l; });
         """
         l = self.length()
         self.v = [x / l for x in self.v]
@@ -578,6 +649,12 @@ class vec3:
         vec3(0.707107, 0.707107, 0)
         >>> vec3(0).normalize_safe()
         vec3(0, 0, 0)
+        _CPP_:
+        double l = self->length();
+        if (l)
+            return vec3_unary_op_inplace(self, [=](double v){ return v / l; });
+        else
+            Py_RETURN_SELF;
         """
         l = self.length()
         if not l == 0.:
@@ -596,6 +673,16 @@ class vec3:
         vec3(0, -1, 0)
         >>> vec3((0,1,0)).cross((0,0,1))
         vec3(1, 0, 0)
+        _CPP_:
+        double v[3];
+        if (!expect_float_sequence(args, v, 3))
+            return NULL;
+        double   x = self->v[1] * v[2] - self->v[2] * v[1],
+                 y = self->v[2] * v[0] - self->v[0] * v[2];
+        self->v[2] = self->v[0] * v[1] - self->v[1] * v[0];
+        self->v[1] = y;
+        self->v[0] = x;
+        Py_RETURN_SELF;
         """
         tools.check_float_sequence(arg3)
         x = self.y * arg3[2] - self.z * arg3[1]

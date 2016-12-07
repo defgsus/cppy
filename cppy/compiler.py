@@ -1,137 +1,17 @@
 import inspect
 import datetime
-
-TYPE_STRUCT_MEMBER = [
-    ("const char*", "tp_name"),
-    ("Py_ssize_t", "tp_basicsize"),
-    ("Py_ssize_t", "tp_itemsize"),
-    ("destructor", "tp_dealloc"),
-    ("printfunc", "tp_print"),
-    ("getattrfunc", "tp_getattr"),
-    ("setattrfunc", "tp_setattr"),
-    ("void*", "tp_reserved"),
-    ("reprfunc", "tp_repr"),
-    ("PyNumberMethods*", "tp_as_number"),
-    ("PySequenceMethods*", "tp_as_sequence"),
-    ("PyMappingMethods*", "tp_as_mapping"),
-    ("hashfunc", "tp_hash"),
-    ("ternaryfunc", "tp_call"),
-    ("reprfunc", "tp_str"),
-    ("getattrofunc", "tp_getattro"),
-    ("setattrofunc", "tp_setattro"),
-    ("PyBufferProcs*", "tp_as_buffer"),
-    ("unsigned long", "tp_flags"),
-    ("const char*", "tp_doc"),
-    ("traverseproc", "tp_traverse"),
-    ("inquiry", "tp_clear"),
-    ("richcmpfunc", "tp_richcompare"),
-    ("Py_ssize_t", "tp_weaklistoffset"),
-    ("getiterfunc", "tp_iter"),
-    ("iternextfunc", "tp_iternext"),
-    ("struct PyMethodDef*", "tp_methods"),
-    ("struct PyMemberDef*", "tp_members"),
-    ("struct PyGetSetDef*", "tp_getset"),
-    ("struct _typeobject*", "tp_base"),
-    ("PyObject*", "tp_dict"),
-    ("descrgetfunc", "tp_descr_get"),
-    ("descrsetfunc", "tp_descr_set"),
-    ("Py_ssize_t", "tp_dictoffset"),
-    ("initproc", "tp_init"),
-    ("allocfunc", "tp_alloc"),
-    ("newfunc", "tp_new"),
-    ("freefunc", "tp_free"),
-    ("inquiry", "tp_is_gc"),
-    ("PyObject*", "tp_bases"),
-    ("PyObject*", "tp_mro"),
-    ("PyObject*", "tp_cache"),
-    ("PyObject*", "tp_subclasses"),
-    ("PyObject*", "tp_weaklist"),
-    ("destructor", "tp_del"),
-    ("unsigned int", "tp_version_tag"),
-    ("destructor", "tp_finalize")
-]
-
-SEQUENCE_FUNCS = [
-    ("__len__", "sq_length"),
-    ("__???__", "sq_concat"),
-    ("__???__", "sq_repeat"),
-    ("__getitem__", "sq_item"),
-    ("__???___", "was_sq_slice"),
-    ("__setitem__", "sq_ass_item"),
-    ("__???___", "was_sq_ass_slice"),
-    ("__contains__", "sq_contains"),
-    ("__???___", "sq_inplace_concat"),
-    ("__???___", "sq_inplace_repeat"),
-]
-
-NUMBER_FUNCS = [
-    ("__add__", "nb_add", "binaryfunc"),
-    ("__sub__", "nb_subtract", "binaryfunc"),
-    ("__mul__", "nb_multiply", "binaryfunc"),
-    ("__???__", "nb_remainder", "binaryfunc"),
-    ("__???__", "nb_divmod", "binaryfunc"),
-    ("__pow__", "nb_power", "ternaryfunc"),
-    ("__neg__", "nb_negative", "unaryfunc"),
-    ("__pos__", "nb_positive", "unaryfunc"),
-    ("__abs__", "nb_absolute", "unaryfunc"),
-    ("__bool__", "nb_bool", "inquiry"),
-    ("__???__", "nb_invert", "unaryfunc"),
-    ("__???__", "nb_lshift", "binaryfunc"),
-    ("__???__", "nb_rshift", "binaryfunc"),
-    ("__and__", "nb_and", "binaryfunc"),
-    ("__xor__", "nb_xor", "binaryfunc"),
-    ("__or__", "nb_or", "binaryfunc"),
-    ("__???__", "nb_int", "unaryfunc"),
-    ("__???__", "nb_reserved", "void*"),
-    ("__???__", "nb_float", "unaryfunc"),
-    ("__iadd__", "nb_inplace_add", "binaryfunc"),
-    ("__isub__", "nb_inplace_subtract", "binaryfunc"),
-    ("__imul__", "nb_inplace_multiply", "binaryfunc"),
-    ("__???___", "nb_inplace_remainder", "binaryfunc"),
-    ("__ipow__", "nb_inplace_power", "ternaryfunc"),
-    ("__???__", "nb_inplace_lshift", "binaryfunc"),
-    ("__???__", "nb_inplace_rshift", "binaryfunc"),
-    ("__iand__", "nb_inplace_and", "binaryfunc"),
-    ("__ixor__", "nb_inplace_xor", "binaryfunc"),
-    ("__ior__", "nb_inplace_or", "binaryfunc"),
-    ("__floordiv__", "nb_floor_divide", "binaryfunc"),
-    ("__truediv__", "nb_true_divide", "binaryfunc"),
-    ("__ifloordiv__", "nb_inplace_floor_divide", "binaryfunc"),
-    ("__itruediv__", "nb_inplace_true_divide", "binaryfunc"),
-    ("__???__", "nb_index", "unaryfunc"),
-]
-
-
-SPECIAL_FUNCS = [
-    ("__str__", "tp_str"),
-    ("__repr__", "tp_repr"),
-    ("__init__", "tp_init"),
-]
-
-# otherwise PyObject*
-SPECIAL_RETURN_TYPES = {
-    "__init__": "int",
-    "__len__": "Py_ssize_t",
-    "__setitem__": "int",
-}
-SPECIAL_ARGUMENTS = {
-    "__getitem__": ", Py_ssize_t index",
-    "__setitem__": ", Py_ssize_t index, PyObject* arg",
-}
-
-def to_c_string(text):
-    text = text.replace("\n", "\\n")
-    text = text.replace("\r", "")
-    text = text.replace('"', '\\"')
-    return text
-
+from .c_types import *
+from .renderer import *
 
 class CodeObject:
+    """Base class of python things that have a cpp representation"""
     def __init__(self, name, doc="", src_pos=""):
         self.name = name
         self.doc = doc if doc else ""
         self.src_pos = src_pos
         self.cpp = ""
+        self.indent_level = 0
+        self.module = None
 
         cpp = self.doc.split("_CPP_:")
         if len(cpp) > 1:
@@ -141,8 +21,24 @@ class CodeObject:
     def __str__(self):
         return "%s" % self.name
 
+    def push_indent(self): self.indent_level += 1
+    def pop_indent(self):
+        if self.indent_level <= 0:
+            raise RuntimeWarning("pop_indent() called without push")
+        self.indent_level -= 1
+
+    def indent(self):
+        return INDENT * self.indent_level
+    def newline(self):
+        return "\n" + self.indent()
+
+    def get_cpp(self):
+        code = self.cpp
+        return indent_code(code, self.indent() + INDENT)
+
     def render_cpp_declaration(self):
         raise NotImplementedError
+
 
 
 class Function(CodeObject):
@@ -152,18 +48,15 @@ class Function(CodeObject):
             doc=inspect.getdoc(func),
             src_pos="%s:%d" % (func.__code__.co_filename, func.__code__.co_firstlineno),
         )
+        if not self.cpp:
+            #self.cpp = "#error %s not implemented" % self.name
+            self.cpp = "Py_RETURN_NOTIMPLEMENTED;"
+
         self.func = func
         self.args = inspect.getargspec(self.func)
         self.for_class = for_class
         self.prefix = "cppy_classmethod_%s_" % for_class.name
         # self.doc += "\n" + str(self.args)
-
-    def get_cpp(self):
-        if not self.cpp:
-            # return "#error %s not implemented" % self.name
-            return "Py_RETURN_NOTIMPLEMENTED;"
-        else:
-            return self.cpp
 
     def get_func_name(self):
         return "%s%s" % (self.prefix, self.name)
@@ -173,19 +66,21 @@ class Function(CodeObject):
 
     def render_cpp_declaration(self, struct_name=None):
         s = """
-    /* %(src_pos)s */
-    /* %(debug)s */
-    static const char* %(prefix)s%(name)s_doc = "%(doc)s";
-    static %(return)s %(prefix)s%(name)s(%(PyObject)s* self%(args)s)
-    {
-        %(code)s
-    }
-    """
-        return s % {"prefix": self.prefix,
+%(indent)s/* %(src_pos)s */
+%(indent)s/* %(debug)s */
+%(indent)sstatic const char* %(prefix)s%(name)s_doc = "%(doc)s";
+%(indent)sstatic %(return)s %(prefix)s%(name)s(%(PyObject)s* self%(args)s)
+%(indent)s{
+%(code)s
+%(indent)s}
+"""
+        return s % {"indent": self.indent(),
+                    "prefix": self.prefix,
                     "name": self.name,
                     "return": self.get_return_type(),
                     "doc": to_c_string(self.doc),
-                    "src_pos": self.src_pos, "code": self.get_cpp(),
+                    "src_pos": self.src_pos,
+                    "code": self.get_cpp(),
                     "PyObject": "PyObject" if struct_name is None else struct_name,
                     "args": SPECIAL_ARGUMENTS.get(self.name, self.get_args_data()[2]),
                     "debug": str(self.args)
@@ -217,12 +112,16 @@ class Function(CodeObject):
     def render_cpp_struct_entry(self):
         args = self.get_args_data()
         return """/* %(debug)s */{ "%(name)s", reinterpret_cast<PyCFunction>(%(funcname)s), %(args)s, %(funcname)s_doc },
-""" % {"name": self.name,
-       "funcname": self.get_func_name(),
-       "args": args[1],
-       "func_type": args[0],
-       "debug": str(self.args)
+""" % {
+            "name": self.name,
+            "funcname": self.get_func_name(),
+            "args": args[1],
+            "func_type": args[0],
+            "debug": str(self.args)
        }
+
+
+
 
 
 class Class(CodeObject):
@@ -233,9 +132,12 @@ class Class(CodeObject):
         )
         self.the_class = the_class
         self.functions = []
-        self.struct_name = "cppy_class_struct_%s" % self.name
-        self.method_struct_name = "cppy_method_def_%s" % self.name
-        self.type_def_struct_name = "cppy_type_def_%s" % self.name
+        self.class_struct_name = "%s_struct" % self.name
+        self.type_struct_name = "%s_type_struct" % self.name
+        self.method_struct_name = "%s_method_struct" % self.name
+        self.number_struct_name = "%s_number_struct" % self.name
+        self.mapping_struct_name = "%s_mapping_struct" % self.name
+        self.sequence_struct_name = "%s_sequence_struct" % self.name
 
     def append(self, o):
         if isinstance(o, Function) and o.cpp:
@@ -267,10 +169,12 @@ class Class(CodeObject):
 
     def render_cpp_declaration(self):
         code = ""
-        code += 'extern "C" {'
-        code += "\n" + self.render_struct()
+        code += self.indent() + 'extern "C" {'
+        self.push_indent()
+        code += "\n" + self.render_class_struct()
         for i in self.functions:
-            code += i.render_cpp_declaration(struct_name=self.struct_name)
+            i.indent_level = self.indent_level
+            code += i.render_cpp_declaration(struct_name=self.class_struct_name)
         code += "\n" + self.render_method_struct()
         if self.has_sequence_function():
             code += "\n" + self.render_sequence_struct()
@@ -278,22 +182,23 @@ class Class(CodeObject):
             code += "\n" + self.render_number_struct()
         code += "\n" + self.render_type_struct()
         code += "\n" + self.render_ctor_impl()
+        self.pop_indent()
         code += '\n} // extern "C"\n'
         code += "\n" + self.render_init_func()
 
         return code
 
     def render_forwards(self):
-        code = """struct %s;\n""" % self.struct_name
+        code = """struct %s;\n""" % self.class_struct_name
         return code
 
-    def render_struct(self):
+    def render_class_struct(self):
         code = """
-    /* base class definition for class '%(name)s' */
+    /* class '%(name)s' */
     struct %(struct_name)s
     {
         PyObject_HEAD
-        %(decl)s
+%(decl)s
     };
     static const char* %(struct_name)s_doc_string = "%(doc)s";
     static PyObject* %(struct_name)s_new_func(struct _typeobject *, PyObject *, PyObject *);
@@ -303,9 +208,9 @@ class Class(CodeObject):
 """
         code %= {
             "name": self.name,
-            "struct_name": self.struct_name,
+            "struct_name": self.class_struct_name,
             "doc": to_c_string(self.doc),
-            "decl": self.cpp }
+            "decl": self.get_cpp() }
         return code
 
     def render_method_struct(self):
@@ -322,50 +227,40 @@ class Class(CodeObject):
         return code
 
     def scoped_name(self):
-        return "%s.%s" % (self.the_class, self.name)
+        return "%s.%s" % (self.the_class.__name__, self.name)
 
     def render_type_struct(self):
         dic = {}
-        for i in TYPE_STRUCT_MEMBER:
-            dic[i[1]] = "NULL"
+        for i in PyTypeObject:
+            dic[i[0]] = "NULL"
         dic.update({
             "tp_name": '"%s"' % self.scoped_name(),
-            "tp_basicsize": "sizeof(%s)" % self.struct_name,
-            "tp_dealloc": "%s_dealloc" % self.struct_name,
+            "tp_basicsize": "sizeof(%s)" % self.class_struct_name,
+            "tp_dealloc": "%s_dealloc" % self.class_struct_name,
             "tp_getattro": "PyObject_GenericGetAttr",
             "tp_setattro": "PyObject_GenericSetAttr",
             "tp_flags": "Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE",
-            "tp_doc": "%s_doc_string" % self.struct_name,
+            "tp_doc": "%s_doc_string" % self.class_struct_name,
             "tp_methods": self.method_struct_name,
-            "tp_new": "%s_new_func" % self.struct_name,
+            "tp_new": "%s_new_func" % self.class_struct_name,
             # "tp_init": "%s_init_func" % self.struct_name,
         })
         for i in SPECIAL_FUNCS:
             if self.has_function(i[0]):
                 dic.update({ i[1]: self.get_function(i[0]).get_func_name() })
         if self.has_sequence_function():
-            dic.update({"tp_as_sequence": "cppy_sequence_%s" % self.name})
+            dic.update({"tp_as_sequence": "&" + self.sequence_struct_name})
         if self.has_number_function():
-            dic.update({"tp_as_number": "cppy_number_%s" % self.name})
+            dic.update({"tp_as_number": "&" + self.number_struct_name})
 
-        code = """
-        /* type definition for class %(name)s */
-        static PyTypeObject %(struct_name)s =
-        {
-            PyVarObject_HEAD_INIT(NULL, 0)
-        """ % {
-            "name": self.name,
-            "struct_name": self.type_def_struct_name
-        }
-
-        for i in TYPE_STRUCT_MEMBER:
-            code += "    /* %(name)s */ (%(type)s)(%(val)s),\n" % {
-                "name": i[1], "type": i[0], "val": dic.get(i[1])
-            }
-        code += "}; /* %s */\n" % self.type_def_struct_name
-        return code
+        return render_struct("PyTypeObject", PyTypeObject,
+                             self.type_struct_name, dic,
+                             first_line="PyVarObject_HEAD_INIT(NULL, 0)")
 
     def render_mapping_struct(self):
+        dic = {
+            "mp_length" : self.has_function("__get")
+        }
         code = """
         static PyMappingMethods cppy_mapping_%(name)s[] =
         {
@@ -373,26 +268,9 @@ class Class(CodeObject):
             (binaryfunc)%(mp_subscript)s,
             (objobjargproc)%(mp_ass_subscript)s
         };
-        """ % {
-            "mp_length" : self.has_function("__get")
-        }
+        """
 
     def render_sequence_struct(self):
-        code = """
-        static PySequenceMethods cppy_sequence_%(name)s[] =
-        {
-            /* sq_length */              (lenfunc)%(sq_length)s,
-            /* sq_concat */           (binaryfunc)%(sq_concat)s,
-            /* sq_repeat */         (ssizeargfunc)%(sq_repeat)s,
-            /* sq_item */           (ssizeargfunc)%(sq_item)s,
-            /* was_sq_slice */             (void*)%(was_sq_slice)s,
-            /* sq_ass_items */   (ssizeobjargproc)%(sq_ass_item)s,
-            /* was_sq_ass_slice */         (void*)%(was_sq_ass_slice)s,
-            /* sq_contains */         (objobjproc)%(sq_contains)s,
-            /* sq_inplace_concat */   (binaryfunc)%(sq_inplace_concat)s,
-            /* sq_inplace_repeat */ (ssizeargfunc)%(sq_inplace_repeat)s
-        };
-"""
         dic = { "name": self.name }
         for i in SEQUENCE_FUNCS:
             val = "nullptr"
@@ -400,26 +278,19 @@ class Class(CodeObject):
                 val = self.get_function(i[0]).get_func_name()
             dic.update({ i[1]: val })
 
-        code %= dic
-        return code
+        return render_struct("PySequenceMethods", PySequenceMethods,
+                             self.sequence_struct_name, dic)
     
     def render_number_struct(self):
-        code = """
-        static PyNumberMethods cppy_number_%(name)s[] =
-        {
-        """ % {
-            "name": self.name,
-        }
+        dic = {}
         for i in NUMBER_FUNCS:
             val = "nullptr"
             if self.has_function(i[0]):
                 val = self.get_function(i[0]).get_func_name()
-            code += "(%s)%s" % (i[2], val)
-            if not i is NUMBER_FUNCS[-1]:
-                code += ","
-            code += "\n"
-        code += "\n};"
-        return code
+            dic.update({i: val})
+        return render_struct("PyNumberMethods", PyNumberMethods,
+                             self.number_struct_name, dic)
+
 
     def render_ctor_impl(self):
         code = """
@@ -445,39 +316,41 @@ class Class(CodeObject):
 """
         code %= {
             "name": self.name,
-            "struct_name": self.struct_name,
-            "type_struct": self.type_def_struct_name
+            "struct_name": self.class_struct_name,
+            "type_struct": self.type_struct_name
         }
         return code
 
     def render_init_func(self):
         code = """
-bool initialize_class_%(name)s(void* vmodule)
-{
-    PyObject* module = reinterpret_cast<PyObject*>(vmodule);
+%(indent)sbool initialize_class_%(name)s(void* vmodule)
+%(indent)s{
+%(indent)s    PyObject* module = reinterpret_cast<PyObject*>(vmodule);
 
-    if (0 != PyType_Ready(&%(struct_name)s))
-    {
-        CPPY_ERROR("Failed to readify class %(name)s for Python 3.4 module");
-        return false;
-    }
+%(indent)s    if (0 != PyType_Ready(&%(struct_name)s))
+%(indent)s    {
+%(indent)s        CPPY_ERROR("Failed to readify class %(name)s for Python 3.4 module");
+%(indent)s        return false;
+%(indent)s    }
 
-    PyObject* object = reinterpret_cast<PyObject*>(&%(struct_name)s);
-    Py_INCREF(object);
-    if (0 != PyModule_AddObject(module, "%(name)s", object))
-    {
-        Py_DECREF(object);
-        CPPY_ERROR("Failed to add class %(name)s to Python 3.4 module");
-        return false;
-    }
-    return true;
-}
+%(indent)s    PyObject* object = reinterpret_cast<PyObject*>(&%(struct_name)s);
+%(indent)s    Py_INCREF(object);
+%(indent)s    if (0 != PyModule_AddObject(module, "%(name)s", object))
+%(indent)s    {
+%(indent)s        Py_DECREF(object);
+%(indent)s        CPPY_ERROR("Failed to add class %(name)s to Python 3.4 module");
+%(indent)s        return false;
+%(indent)s    }
+%(indent)s    return true;
+%(indent)s}
 """
         code %= {
+            "indent": self.indent(),
             "name": self.name,
-            "struct_name": self.type_def_struct_name
+            "struct_name": self.type_struct_name
         }
         return code
+
 
 
 class Module:
@@ -559,6 +432,8 @@ bool initialize_module_%(name)s();
 #include <iostream>
 #define CPPY_ERROR(arg__) { std::cerr << arg__ << std::endl; }
 
+%(static_asserts)s
+
 %(namespace_open)s
 namespace {
 extern "C" {
@@ -575,8 +450,9 @@ extern "C" {
 namespace {
 """
         code %= {
-            "header": self.cpp_header,
-            "decl": self.cpp,
+            "static_asserts" : self.render_static_asserts(),
+            "header": self.format_cpp(self.cpp_header),
+            "decl": self.format_cpp(self.cpp),
             "forwards": self.render_forwards(),
             "namespace_open": self.render_namespace_open(),
             "namespace_close": self.render_namespace_close(),
@@ -596,7 +472,7 @@ namespace {
                 code += i.render_cpp_declaration()
 
         if self.cpp2:
-            code += "\n" + self.cpp2 + "\n"
+            code += "\n" + self.format_cpp(self.cpp2) + "\n"
 
         code += '\nextern "C" {\n'
         code += self.render_module_def()
@@ -605,6 +481,43 @@ namespace {
         code += "\n" + self.render_module_init()
         code += "\n" + self.render_namespace_close()
         code += "\n" + self.cpp_footer
+        return code
+
+    def format_cpp(self, code):
+        code1 = ""
+        prev = 0
+        import re
+        for i in re.finditer(r"\$([A-Z_]+)\(([A-Za-z_][A-Za-z_0-9]*)\)", code):
+            span = i.span()
+            code1 += code[prev:span[0]]
+            prev = span[1]
+            code1 += self.get_template_arg(i.groups()[0], i.groups()[1])
+        code1 += code[prev:]
+        code = code1
+        return code
+
+    def get_template_arg(self, type, name):
+        if type == "STRUCT":
+            for i in self.classes:
+                if i.name == name:
+                    return i.class_struct_name
+            raise ValueError("$STRUCT for %s not known" % name)
+        if type == "TYPE_STRUCT":
+            for i in self.classes:
+                if i.name == name:
+                    return i.type_struct_name
+            raise ValueError("$TYPE_STRUCT for %s not known" % name)
+        raise ValueError("Unknown $ template call '" % type)
+
+    def render_static_asserts(self):
+        code = "#include <type_traits>\n"
+        for functype in FUNCTIONS:
+            params = FUNCTIONS[functype]
+            parstr = params[1][0]
+            for j in range(1, len(params[1])):
+                parstr += ", %s" % params[1][j]
+            typedef = "%(ret)s(*)(%(params)s)" % { "ret": params[0], "params": parstr }
+            code += 'static_assert(std::is_same<%s,\n    %s>::value, "cppy/python api mismatch");\n' % (functype, typedef)
         return code
 
     def render_forwards(self):
@@ -621,7 +534,7 @@ namespace {
 
     def render_namespace_close(self):
         code = ""
-        for i in self.namespaces:
+        for i in reversed(self.namespaces):
             code += "} // namespace %s\n" % i
         return code
 
@@ -773,7 +686,7 @@ def compile(module):
     """
     Scans the module and returns an cppy.Module class
     :param module: a loaded module
-    :return: Module
+    :return: a Module instance
     """
     if not inspect.ismodule(module):
         raise TypeError("Expected module, got %s" % type(module))
@@ -781,3 +694,11 @@ def compile(module):
     c = _compiler()
     c.inspect_module(module)
     return c.objects
+
+
+if __name__ == "__main__":
+    pass
+    #print("TYPE_STRUCT_MEMBER = [")
+    #for i in TYPE_STRUCT_MEMBER:
+    #    print('    ("%s", "%s"),' % (i[1], i[0]))
+    #print("]")
