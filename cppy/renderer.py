@@ -8,18 +8,27 @@ def to_c_string(text):
     text = text.replace('"', '\\"')
     return text
 
+def is_whitespace(c):
+    return c == ' ' or c == '\n' or c == '\t'
+
 def strip_newlines(code):
-    # TODO:
-    return code.strip()
-    #for i, c in enumerate(code):
-    #    if c == ' '
+    start = 0
+    for i, c in enumerate(code):
+        if c == '\n':
+            start = i+1
+        if not (c == ' ' or c == '\t' or c == '\n'):
+            break
+    i = len(code)-1
+    while i > 0 and is_whitespace(code[i]):
+        i -= 1
+    return code[start:i+1]
 
 def indent_code(code, indent):
     import re
     return indent + re.sub(r"\n[ |\t]*", "\n"+indent, code.strip())
 
 def change_text_indent(code, len):
-    lines = code.replace("\t", "    ").split("\n")
+    lines = code.replace("\t", INDENT).split("\n")
     min_space = -1
     for line in lines:
         for i, k in enumerate(line):
@@ -32,7 +41,9 @@ def change_text_indent(code, len):
     pre = " " * len
     code = ""
     for line in lines:
-        code += pre + line[min_space:] + "\n"
+        li = line[min_space:]
+        if li:
+            code += pre + li + "\n"
     return code
 
 
@@ -68,7 +79,12 @@ def render_function(name, type, cpp, for_class=None):
     )
     return code
 
+
 def render_struct(structtypename, struct_table, name, dictionary, indent="", first_line=""):
+    """
+    Renders a struct with the contents from 'dictionary'
+    struct_table is something like c_types.PyNumberMethods
+    """
     name_width = 1
     type_width = 1
     for i in struct_table:
@@ -81,10 +97,14 @@ def render_struct(structtypename, struct_table, name, dictionary, indent="", fir
     if first_line:
         code += indent + INDENT + first_line + "\n"
     for i in struct_table:
+        cast = "static"
+        # return type of 'new' function is the class struct, not PyObject
+        if i[0] == "tp_new":
+            cast = "reinterpret"
         code += "%(indent)s%(name)s %(type)s(%(value)s)" % {
             "indent": indent+INDENT,
             "name" : ("/* %s */" % i[0]).ljust(name_width + 6),
-            "type" : ("(%s)" % i[1]).ljust(type_width + 13),
+            "type" : ("%s_cast<%s>" % (cast, i[1])).ljust(type_width + 13),
             "value" : str(dictionary.get(i[0], "NULL"))
         }
         if not i == struct_table[-1]:

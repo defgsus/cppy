@@ -111,8 +111,8 @@ class vec3:
     @property
     def z(self):
         """
-        _CPP_: return toPython(self->v[1]);
-        //CPP_: double v; if (!fromPython(arg1, &v)) return 1; self->v[1] = v; return 0;
+        _CPP_: return toPython(self->v[2]);
+        _CPP_: double v; if (!fromPython(arg1, &v)) return 1; self->v[2] = v; return 0;
         """
         return self.v[2]
     @z.setter
@@ -124,6 +124,7 @@ class vec3:
     def __len__(self):
         """
         _CPP_:
+        CPPY_UNUSED(self);
         return 3;
         """
         return 3

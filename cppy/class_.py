@@ -185,7 +185,7 @@ class Class(CodeObject):
     def render_ctor_impl(self):
         code = """
         /* create new instance of %(name)s class */
-        %(struct_name)s* %(new_func)s(struct _typeobject *, PyObject* arg1, PyObject* arg2)
+        %(struct_name)s* %(new_func)s(struct _typeobject *, PyObject* , PyObject* )
         {
             return PyObject_New(%(struct_name)s, &%(type_struct)s);
         }

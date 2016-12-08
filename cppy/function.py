@@ -126,7 +126,7 @@ class Function(CodeObject):
     def render_cpp_declaration(self, struct_name=None):
         """Returns the whole cpp function declaration"""
         doc = ""
-        if self.doc:
+        if self.doc and self.is_normal_function():
             doc = 'static const char* %s_doc = "%s";\n' % (self.func_name, to_c_string(self.doc))
         code = "/* %(src_pos)s */\n/* %(debug)s */\n%(doc)s" % {
             "src_pos": self.src_pos,
@@ -135,36 +135,17 @@ class Function(CodeObject):
         }
         func_type = FUNCNAME_TO_TYPE.get(self.name, "binaryfunc")
         code += render_function(self.func_name, func_type, self.get_cpp(), self.for_class)
-        """
-        get_self = ""
-        if struct_name:
-            get_self = "    %(struct)s* self = reinterpret_cast<%(struct)s*>(arg0);\n" % {
-                "struct": struct_name
-            }
-        s %= {      "indent": self.indent(),
-                    "func_name": self.func_name,
-                    "return": self.get_return_type(),
-                    "doc": doc,
-                    "src_pos": self.src_pos,
-                    "get_self": get_self,
-                    "code": self.get_cpp(),
-                    "PyObject": "PyObject" if struct_name is None else struct_name,
-                    "args": self.get_cpp_argument_string(),
-                    "debug": str(self.args)
-                    }
-        """
+
         return self.format_code(code)
 
 
     def render_cpp_member_struct_entry(self):
         args = self.get_args_data()
-        s = """/* %(debug)s */\n{ "%(name)s", reinterpret_cast<PyCFunction>(%(funcname)s), %(args)s, %(doc_name)s },
-""" % {
+        s = '{ "%(name)s", reinterpret_cast<PyCFunction>(%(funcname)s), %(args)s, %(doc_name)s },\n' % {
             "name": self.name,
             "doc_name": ("%s_doc" % self.func_name) if self.doc else "NULL",
             "funcname": self.func_name,
             "args": args[1],
-            "func_type": args[0],
-            "debug": str(self.args)
-       }
-        return self.format_code(s)
+            "func_type": args[0]
+        }
+        return s
