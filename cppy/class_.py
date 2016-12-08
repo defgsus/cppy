@@ -98,12 +98,7 @@ class Class(CodeObject):
     def render_method_struct(self):
         code = "static PyMethodDef %s[] =\n{\n" % self.method_struct_name
         for i in self.functions:
-            add_here = True
-            # for j in SPECIAL_FUNCS:
-            #    if i.name == j[0]:
-            #        add_here = False
-            #        break
-            if add_here:
+            if i.is_normal_function():
                 code += "    " + i.render_cpp_member_struct_entry()
         code += "\n    { NULL, NULL, 0, NULL }\n};\n"
         return self.format_code(code)

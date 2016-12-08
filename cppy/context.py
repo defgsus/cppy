@@ -73,7 +73,7 @@ class ExportContext:
             prev = span[1]
             code1 += self.get_template_arg(i.groups()[0], i.groups()[1])
         code1 += code[prev:]
-        code = code1
+        code = code1.strip()
         return change_text_indent(code, self.indent_length())
 
     def get_template_arg(self, tag, name):
