@@ -31,8 +31,10 @@ FUNCTIONS = {
     "initproc":             ("int",         ("PyObject*", "PyObject*", "PyObject*")),
     "newfunc":              ("PyObject*",   ("struct _typeobject*", "PyObject*", "PyObject*")),
     "allocfunc":            ("PyObject*",   ("struct _typeobject*", "Py_ssize_t")),
-}
 
+    "getter":               ("PyObject*",   ("PyObject*", "void*")),
+    "setter":               ("int",         ("PyObject*", "PyObject*", "void*")),
+}
 
 
 """
@@ -213,6 +215,7 @@ NUMBER_FUNCS = [
 
 TYPE_FUNCS = [
     ("__str__", "tp_str"),
+    ("__unicode__", "tp_str"),
     ("__repr__", "tp_repr"),
     ("__init__", "tp_init"),
     ("__eq__", "tp_richcompare")

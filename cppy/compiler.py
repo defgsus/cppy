@@ -1,6 +1,8 @@
 from .context import *
 from .renderer import *
-
+from .class_ import Class
+from .function import Function
+from .property_ import Property
 
 class _Exporter:
     """
@@ -46,12 +48,17 @@ class _Exporter:
             except BaseException as e:
                 self.log("EXCEPTION %s" % e)
                 continue
-            if inspect.isfunction(o):
-                self.inspect_function(o)
-            elif inspect.isclass(o):
-                self.inspect_class(o)
+            self.inspect_entity(o)
 
         self.pop_scope()
+
+    def inspect_entity(self, o):
+        if inspect.isfunction(o):
+            self.inspect_function(o)
+        elif inspect.isclass(o):
+            self.inspect_class(o)
+        elif inspect.isgetsetdescriptor(o):
+            print("GETSET %s" % o)
 
     def inspect_function(self, func, class_obj=None):
         self.log("inspecting function %s" % func)
@@ -65,6 +72,12 @@ class _Exporter:
                 class_obj.append(o)
         self.pop_scope()
 
+    def inspect_property(self, prop, class_obj):
+        p = Property(prop, class_obj)
+        if p.has_cpp:
+            p.context = self.context
+            class_obj.properties.append(p)
+
     def inspect_class(self, cls):
         self.log("inspecting class %s" % cls)
         self.push_scope(cls.__name__)
@@ -72,6 +85,9 @@ class _Exporter:
         for n, mem in inspect.getmembers(cls):
             if inspect.isfunction(mem):
                 self.inspect_function(mem, class_obj)
+            elif isinstance(mem, property):
+                self.inspect_property(mem, class_obj)
+
         self.context.append(class_obj)
         self.pop_scope()
 

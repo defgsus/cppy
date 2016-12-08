@@ -1,7 +1,7 @@
 import inspect
 from .codeobject import *
 from .c_types import *
-from .renderer import to_c_string
+from .renderer import *
 
 class Function(CodeObject):
     """A python c-api implementation of a global or member function"""
@@ -25,6 +25,12 @@ class Function(CodeObject):
             self.has_cpp = False
             self.cpp = "#error %s not implemented" % self.name
             #self.cpp = "Py_RETURN_NOTIMPLEMENTED;"
+
+    def __str__(self):
+        if self.for_class:
+            return "Function(%s.%s)" % (self.for_class.name, self.name)
+        else:
+            return "Function(%s)" % self.name
 
     def is_normal_function(self):
         """Returns True if this function should go into the general PyMethodDef"""
@@ -93,6 +99,7 @@ class Function(CodeObject):
             return str
         return "PyObject* arg0" + self.get_args_data()[2]
 
+    # TODO: THis is messed up!
     def get_args_data(self):
         if self.args.varargs and len(self.args.varargs):
             return ("PyFunctionWithKeywords", "METH_VARARGS", ", PyObject* arg1, PyObject* kwargs",)
@@ -118,18 +125,17 @@ class Function(CodeObject):
 
     def render_cpp_declaration(self, struct_name=None):
         """Returns the whole cpp function declaration"""
-        s = """
-/* %(src_pos)s */
-/* %(debug)s */
-%(doc)sstatic %(return)s %(func_name)s(%(args)s)
-{
-%(get_self)s
-%(code)s
-}
-"""
         doc = ""
         if self.doc:
             doc = 'static const char* %s_doc = "%s";\n' % (self.func_name, to_c_string(self.doc))
+        code = "/* %(src_pos)s */\n/* %(debug)s */\n%(doc)s" % {
+            "src_pos": self.src_pos,
+            "debug": str(self.args),
+            "doc": doc
+        }
+        func_type = FUNCNAME_TO_TYPE.get(self.name, "binaryfunc")
+        code += render_function(self.func_name, func_type, self.get_cpp(), self.for_class)
+        """
         get_self = ""
         if struct_name:
             get_self = "    %(struct)s* self = reinterpret_cast<%(struct)s*>(arg0);\n" % {
@@ -146,7 +152,8 @@ class Function(CodeObject):
                     "args": self.get_cpp_argument_string(),
                     "debug": str(self.args)
                     }
-        return self.format_code(s)
+        """
+        return self.format_code(code)
 
 
     def render_cpp_member_struct_entry(self):

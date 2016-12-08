@@ -36,14 +36,25 @@ class ExportContext:
             self.functions.append(o)
         elif isinstance(o, Class):
             self.classes.append(o)
+        else:
+            raise NotImplementedError("Unhandled class %s" % o)
 
     def dump(self):
         print("# -- global functions --")
         for i in self.functions:
             print(i)
         print("# -- global classes --")
-        for i in self.classes:
-            print(i)
+        for clas in self.classes:
+            print(clas)
+            if clas.functions:
+                print("    -- functions --")
+                for i in clas.functions:
+                    print("   ", i)
+            if clas.properties:
+                print("    -- properties --")
+                for i in clas.properties:
+                    print("   ", i)
+
 
     def push_indent(self):
         self.indent_level += 1
@@ -73,46 +84,53 @@ class ExportContext:
             prev = span[1]
             code1 += self.get_template_arg(i.groups()[0], i.groups()[1])
         code1 += code[prev:]
-        code = code1.strip()
+        code = strip_newlines(code1)
         return change_text_indent(code, self.indent_length())
 
-    def get_template_arg(self, tag, name):
+    def get_template_arg(self, tag, the_args):
         """Returns the value for a template tag '$tag(name)'"""
-        args = name.split(",")
+        args = the_args.split(",")
         args = [x.strip() for x in args]
+        if not args:
+            raise ValueError("No arguments to template tag '%s'" % tag)
+        class_name = args[-1]
+        bad_arg = False
 
         if tag == "STRUCT":
             for i in self.classes:
-                if i.name == name:
+                if i.name == class_name:
                     return i.class_struct_name
-            raise ValueError("$STRUCT for %s not known" % name)
+            bad_arg = True
 
         if tag == "TYPE_STRUCT":
             for i in self.classes:
-                if i.name == name:
+                if i.name == class_name:
                     return i.type_struct_name
-            raise ValueError("$TYPE_STRUCT for %s not known" % name)
+            bad_arg = True
 
         if tag == "NEW":
             for i in self.classes:
-                if i.name == name:
+                if i.name == class_name:
                     return "%s(&%s,NULL,NULL)" % (i.class_new_func_name, i.type_struct_name)
-            raise ValueError("$NEW for %s not known" % name)
-
-        if tag == "COPY":
-            for i in self.classes:
-                if i.name == name:
-                    return "%s(&%s,NULL,NULL)" % (i.class_new_func_name, i.type_struct_name)
-            raise ValueError("$NEW for %s not known" % name)
+            bad_arg = True
 
         if tag == "IS_INSTANCE":
-            name = args[1]
+            class_name = args[1]
             for i in self.classes:
-                if i.name == name:
-                    return "PyObject_TypeCheck(%s, &%s)" % (args[0], i.type_struct_name)
-            raise ValueError("$IS_INSTANCE for %s not known" % name)
+                if i.name == class_name:
+                    return "%s(%s)" % (i.class_is_instance_func_name, args[0])
+            raise ValueError("$IS_INSTANCE for %s not known" % class_name)
 
-        raise ValueError("Unknown $ template tag '%s'" % tag)
+        if tag == "COPY":
+            class_name = args[1]
+            for i in self.classes:
+                if i.name == class_name:
+                    return "%s(%s)" % (i.class_copy_func_name, args[0])
+            bad_arg = True
+
+        if bad_arg:
+            raise ValueError("Bad arguments '%s' to template tag '%s'" % (class_name, tag))
+        raise ValueError("Unknown template tag '%s'" % tag)
 
 
 

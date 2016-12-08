@@ -8,6 +8,12 @@ def to_c_string(text):
     text = text.replace('"', '\\"')
     return text
 
+def strip_newlines(code):
+    # TODO:
+    return code.strip()
+    #for i, c in enumerate(code):
+    #    if c == ' '
+
 def indent_code(code, indent):
     import re
     return indent + re.sub(r"\n[ |\t]*", "\n"+indent, code.strip())
@@ -30,6 +36,37 @@ def change_text_indent(code, len):
     return code
 
 
+def render_func_def(name, type):
+    if not type in FUNCTIONS:
+        raise ValueError("Function type for %s not in c_types.FUNCTIONS" % type)
+    args = FUNCTIONS[type]
+    code = "static %s %s(" % (args[0], name)
+    for i, a in enumerate(args[1]):
+        code += "%s arg%d" % (a, i)
+        if i + 1 < len(args[1]):
+            code += ", "
+    return code + ")"
+
+def render_function(name, type, cpp, for_class=None):
+    if not type in FUNCTIONS:
+        raise ValueError("Function type for %s not in c_types.FUNCTIONS" % type)
+    get_self = ""
+    unused = ""
+    for i in range(len(FUNCTIONS[type][1])):
+        unused += "CPPY_UNUSED(arg%d); " % i
+    if unused:
+        unused = INDENT + unused + "\n"
+
+    if for_class:
+        get_self = INDENT + "%(struct)s* self = reinterpret_cast<%(struct)s*>(arg0);\n" % {
+                                                    "struct": for_class.class_struct_name }
+    code = "%s\n{\n%s%s%s\n}\n" % (
+        render_func_def(name, type),
+        unused,
+        get_self,
+        change_text_indent(strip_newlines(cpp), 4)
+    )
+    return code
 
 def render_struct(structtypename, struct_table, name, dictionary, indent="", first_line=""):
     name_width = 1
@@ -126,8 +163,14 @@ class Renderer:
         #include <python3.4/Python.h>
         #include <python3.4/structmember.h>
 
-        #include <iostream>
-        #define CPPY_ERROR(arg__) { std::cerr << arg__ << std::endl; }
+        #ifndef CPPY_ERROR
+        #   include <iostream>
+        #   define CPPY_ERROR(arg__) { std::cerr << arg__ << std::endl; }
+        #endif
+
+        #ifndef CPPY_UNUSED
+        #   define CPPY_UNUSED(arg__) (void)arg__
+        #endif
 
         %(static_asserts)s
 
