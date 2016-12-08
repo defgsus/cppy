@@ -101,12 +101,12 @@ namespace {
 _CPP_:
     bool is_vec3(PyObject* obj)
     {
-        return PyObject_TypeCheck(obj, &$TYPE_STRUCT(vec3));
+        return $IS_INSTANCE(obj, vec3);
     }
 
     PyObject* new_vec3()
     {
-        return $STRUCT(vec3)_new_func(NULL,NULL,NULL);
+        return $NEW(vec3);
     }
 
     PyObject* vec3_set($STRUCT(vec3)* self, PyObject* args)
@@ -231,10 +231,7 @@ class vec3:
     typically of length 3 as well, containing float-convertible elements
     _CPP_:
     double v[3];
-    double length() const
-    {
-        return std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
-    }
+    double length() const { return std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]); }
     """
 
     def __init__(self, arg=None):

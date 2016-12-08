@@ -20,7 +20,8 @@ class CodeObject:
     def push_indent(self): self.context.push_indent()
     def pop_indent(self): self.context.pop_indent()
     def indent(self): return self.context.indent()
-    def newline(self): return self.context.newline()
+    def indent_length(self): return self.context.indent_length()
+    def format_code(self, code): return self.context.format_cpp(code)
 
     def get_cpp(self):
         return self.context.format_cpp(self.cpp) if self.cpp else ""

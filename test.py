@@ -8,6 +8,8 @@ def doit():
     #objs = cppy.compiler.compile(pector)
     import vec3
     objs = cppy.compiler.compile(vec3)
+    #import test_module
+    #objs = cppy.compiler.compile(test_module)
 
     objs.context.dump()
 
@@ -22,8 +24,13 @@ def doit():
 
 def test_render():
     from cppy import renderer
-    from cppy import c_types
-    print(renderer.render_struct("PySequenceMethods", "my_struct", c_types.PySequenceMethods, {}))
+    code = """
+    for i in a:
+        if i in a:
+            break
+    """
+    print(code)
+    print(renderer.change_text_indent(code, 0))
 
 doit()
 #test_render()

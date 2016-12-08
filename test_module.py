@@ -16,7 +16,7 @@ def func_a():
     Returns 1.
     :return: float
     _CPP_:
-    return PyFloat_FromDouble(444.);
+    return toPython(444.);
     """
     return 1.
 
@@ -30,7 +30,7 @@ def func_add(a, b):
     double a, b;
     if (!PyArg_ParseTuple(args, "dd", &a, &b))
         return NULL;
-    return PyFloat_FromDouble(a+b);
+    return toPython(a+b);
     """
     return float(a + b)
 
@@ -43,23 +43,31 @@ class Abel:
     """
     member = 1.
     def __init__(self):
+        """
+        _CPP_:
+        self->v[0] = self->v[1] = self->v[2] = self->v[3] = 0.
+        return 0;
+        """
         pass
 
     def __eq__(self, other):
-        return member == other.member
+        pass
 
     def __repr__(self):
         """
         _CPP_:
-        return fromString(QString("Abel(%1, %2, %3, %4)")
-            .arg(self->v[0]).arg(self->v[1]).arg(self->v[2]).arg(self->v[3]) );
+        return toPython(QString("Abel@%1").arg(size_t(self),0,16));
         """
+        pass
+
     def __str__(self):
         """
         _CPP_:
-        return fromString(QString("Abel(%1, %2, %3, %4)")
+        return toPython(QString("Abel(%1, %2, %3, %4)")
             .arg(self->v[0]).arg(self->v[1]).arg(self->v[2]).arg(self->v[3]) );
         """
+        pass
+
 
     @property
     def amazingness(self):
@@ -114,6 +122,8 @@ class Kain(Abel):
     """
     member = 2.
     def slay(self):
-        "Slays Abel"
+        """
+        Slays Abel
+        """
         pass
 

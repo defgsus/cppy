@@ -11,10 +11,6 @@ class Function(CodeObject):
             doc=inspect.getdoc(func),
             src_pos="%s:%d" % (func.__code__.co_filename, func.__code__.co_firstlineno),
         )
-        if not self.cpp:
-            #self.cpp = "#error %s not implemented" % self.name
-            self.cpp = "Py_RETURN_NOTIMPLEMENTED;"
-
         self.func = func
         self.args = inspect.getargspec(self.func)
         self.for_class = for_class
@@ -24,21 +20,35 @@ class Function(CodeObject):
             self.func_name = "cppy_%s" % self.name
         # self.doc += "\n" + str(self.args)
 
+        self.has_cpp = True
+        if not self.cpp:
+            self.has_cpp = False
+            self.cpp = "#error %s not implemented" % self.name
+            #self.cpp = "Py_RETURN_NOTIMPLEMENTED;"
+
     def get_return_type(self):
-        return SPECIAL_RETURN_TYPES.get(self.name, "PyObject*")
+        if not self.name in FUNCNAME_TO_TYPE:
+            return "PyObject*"
+        type = FUNCNAME_TO_TYPE[self.name]
+        if not type in FUNCTIONS:
+            raise ValueError("Function type for %s not in c_types.FUNCTIONS" % type)
+        return FUNCTIONS[type][0]
+        #return SPECIAL_RETURN_TYPES.get(self.name, "PyObject*")
+
+
 
     def render_cpp_declaration(self, struct_name=None):
         """Returns the whole cpp function declaration"""
         s = """
-        /* %(src_pos)s */
-        /* %(debug)s */
-        static const char* %(func_name)s_doc = "%(doc)s";
-        static %(return)s %(func_name)s(%(PyObject)s* self%(args)s)
-        {
-            %(code)s
-            }
-        """
-        return s % {"indent": self.indent(),
+/* %(src_pos)s */
+/* %(debug)s */
+static const char* %(func_name)s_doc = "%(doc)s";
+static %(return)s %(func_name)s(%(PyObject)s* self%(args)s)
+{
+%(code)s
+}
+"""
+        s %= {      "indent": self.indent(),
                     "func_name": self.func_name,
                     "return": self.get_return_type(),
                     "doc": to_c_string(self.doc),
@@ -48,6 +58,7 @@ class Function(CodeObject):
                     "args": SPECIAL_ARGUMENTS.get(self.name, self.get_args_data()[2]),
                     "debug": str(self.args)
                     }
+        return self.format_code(s)
 
     def get_args_data(self):
         if self.args.varargs and len(self.args.varargs):
@@ -74,7 +85,7 @@ class Function(CodeObject):
 
     def render_cpp_member_struct_entry(self):
         args = self.get_args_data()
-        return """/* %(debug)s */{ "%(name)s", reinterpret_cast<PyCFunction>(%(funcname)s), %(args)s, %(funcname)s_doc },
+        s = """/* %(debug)s */\n{ "%(name)s", reinterpret_cast<PyCFunction>(%(funcname)s), %(args)s, %(funcname)s_doc },
 """ % {
             "name": self.name,
             "funcname": self.func_name,
@@ -82,3 +93,4 @@ class Function(CodeObject):
             "func_type": args[0],
             "debug": str(self.args)
        }
+        return self.format_code(s)

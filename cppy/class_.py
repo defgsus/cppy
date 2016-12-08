@@ -17,6 +17,8 @@ class Class(CodeObject):
         self.number_struct_name = "%s_number_struct" % self.name
         self.mapping_struct_name = "%s_mapping_struct" % self.name
         self.sequence_struct_name = "%s_sequence_struct" % self.name
+        self.class_new_func_name = "cppy_new_%s" % self.class_struct_name
+        self.class_dealloc_func_name = "cppy_dealloc_%s" % self.class_struct_name
 
     def append(self, o):
         if isinstance(o, Function) and o.cpp:
@@ -47,6 +49,7 @@ class Class(CodeObject):
         return False
 
     def render_cpp_declaration(self):
+        """Renders the complete cpp code to define the class and it's functions"""
         code = ""
         code += self.indent() + 'extern "C" {'
         self.push_indent()
@@ -61,35 +64,36 @@ class Class(CodeObject):
         code += "\n" + self.render_type_struct()
         code += "\n" + self.render_ctor_impl()
         self.pop_indent()
-        code += '\n} // extern "C"\n'
-        code += "\n" + self.render_init_func()
+        code += self.indent() + '\n} // extern "C"\n'
+        code += self.indent() + "\n" + self.render_init_func()
 
         return code
 
     def render_forwards(self):
         code = """struct %s;\n""" % self.class_struct_name
-        return code
+        return self.format_code(code)
 
     def render_class_struct(self):
         code = """
-    /* class '%(name)s' */
-    struct %(struct_name)s
-    {
-        PyObject_HEAD
+        /* class '%(name)s' */
+        struct %(struct_name)s
+        {
+            PyObject_HEAD
 %(decl)s
-    };
-    static const char* %(struct_name)s_doc_string = "%(doc)s";
-    static PyObject* %(struct_name)s_new_func(struct _typeobject *, PyObject *, PyObject *);
-    //static int %(struct_name)s_init_func(PyObject*, PyObject*, PyObject*);
-    //static void %(struct_name)s_copy_func(%(struct_name)s*);
-    static void %(struct_name)s_dealloc(PyObject* self);
+        };
+        static PyObject* %(new_func)s(struct _typeobject *, PyObject *, PyObject *);
+        static void %(dealloc_func)s(PyObject* self);
+        //static void %(struct_name)s_copy_func(%(struct_name)s*);
+        static const char* %(struct_name)s_doc_string = "%(doc)s";
 """
         code %= {
             "name": self.name,
             "struct_name": self.class_struct_name,
+            "new_func": self.class_new_func_name,
+            "dealloc_func": self.class_dealloc_func_name,
             "doc": to_c_string(self.doc),
-            "decl": self.get_cpp()}
-        return code
+            "decl": change_text_indent(self.cpp, 12) }
+        return self.format_code(code)
 
     def render_method_struct(self):
         code = "static PyMethodDef %s[] =\n{\n" % self.method_struct_name
@@ -102,7 +106,7 @@ class Class(CodeObject):
             if add_here:
                 code += "    " + i.render_cpp_member_struct_entry()
         code += "\n    { NULL, NULL, 0, NULL }\n};\n"
-        return code
+        return self.format_code(code)
 
     def scoped_name(self):
         return "%s.%s" % (self.the_class.__name__, self.name)
@@ -114,16 +118,15 @@ class Class(CodeObject):
         dic.update({
             "tp_name": '"%s"' % self.scoped_name(),
             "tp_basicsize": "sizeof(%s)" % self.class_struct_name,
-            "tp_dealloc": "%s_dealloc" % self.class_struct_name,
+            "tp_dealloc": self.class_dealloc_func_name,
             "tp_getattro": "PyObject_GenericGetAttr",
             "tp_setattro": "PyObject_GenericSetAttr",
             "tp_flags": "Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE",
             "tp_doc": "%s_doc_string" % self.class_struct_name,
             "tp_methods": self.method_struct_name,
-            "tp_new": "%s_new_func" % self.class_struct_name,
-            # "tp_init": "%s_init_func" % self.struct_name,
+            "tp_new": self.class_new_func_name
         })
-        for i in SPECIAL_FUNCS:
+        for i in TYPE_FUNCS:
             if self.has_function(i[0]):
                 dic.update({i[1]: self.get_function(i[0]).func_name})
         if self.has_sequence_function():
@@ -131,100 +134,91 @@ class Class(CodeObject):
         if self.has_number_function():
             dic.update({"tp_as_number": "&" + self.number_struct_name})
 
-        return render_struct("PyTypeObject", PyTypeObject,
+        return self.format_code(
+                render_struct("PyTypeObject", PyTypeObject,
                              self.type_struct_name, dic,
-                             first_line="PyVarObject_HEAD_INIT(NULL, 0)")
+                             first_line="PyVarObject_HEAD_INIT(NULL, 0)") )
 
     def render_mapping_struct(self):
-        dic = {
-            "mp_length": self.has_function("__get")
-        }
-        code = """
-        static PyMappingMethods cppy_mapping_%(name)s[] =
-        {
-            (lenfunc)%(mp_length)s,
-            (binaryfunc)%(mp_subscript)s,
-            (objobjargproc)%(mp_ass_subscript)s
-        };
-        """
+        pass
 
     def render_sequence_struct(self):
-        dic = {"name": self.name}
+        dic = dict()
         for i in SEQUENCE_FUNCS:
-            val = "nullptr"
             if self.has_function(i[0]):
                 val = self.get_function(i[0]).func_name
-            dic.update({i[1]: val})
+                dic.update({i[1]: val})
 
-        return render_struct("PySequenceMethods", PySequenceMethods,
-                             self.sequence_struct_name, dic)
+        return self.format_code(render_struct("PySequenceMethods", PySequenceMethods,
+                             self.sequence_struct_name, dic))
 
     def render_number_struct(self):
         dic = {}
         for i in NUMBER_FUNCS:
-            val = "nullptr"
             if self.has_function(i[0]):
                 val = self.get_function(i[0]).func_name
-            dic.update({i: val})
-        return render_struct("PyNumberMethods", PyNumberMethods,
-                             self.number_struct_name, dic)
+                dic.update({i[1]: val})
+        return self.format_code(render_struct("PyNumberMethods", PyNumberMethods,
+                             self.number_struct_name, dic))
 
     def render_ctor_impl(self):
         code = """
-    PyObject* %(struct_name)s_new_func(struct _typeobject *, PyObject *, PyObject *)
-    {
-        return reinterpret_cast<PyObject*>(
-            PyObject_New(%(struct_name)s, &%(type_struct)s)
-            );
-    }
-    //int %(struct_name)s_init_func(PyObject*, PyObject*, PyObject*) { return 0; }
-    /*void %(struct_name)s_copy_func(%(struct_name)s* other)
-    {
-        auto copy = reinterpret_cast<PyObject*>(
-            PyObject_New(%(struct_name)s, &%(type_struct)s)
-            );
-        // decl
-        return copy
-    }*/
-    void %(struct_name)s_dealloc(PyObject* self)
-    {
-        self->ob_type->tp_free(self);
-    }
+        /* create new instance of %(name)s class */
+        PyObject* %(new_func)s(struct _typeobject *, PyObject* arg1, PyObject* arg2)
+        {
+            return reinterpret_cast<PyObject*>(
+                PyObject_New(%(struct_name)s, &%(type_struct)s)
+                );
+        }
+        void %(dealloc_func)s(PyObject* self)
+        {
+            self->ob_type->tp_free(self);
+        }
+        /*void %(struct_name)s_copy_func(%(struct_name)s* other)
+        {
+            auto copy = reinterpret_cast<PyObject*>(
+                PyObject_New(%(struct_name)s, &%(type_struct)s)
+                );
+            // decl
+            return copy
+        }*/
 """
         code %= {
             "name": self.name,
             "struct_name": self.class_struct_name,
+            "new_func": self.class_new_func_name,
+            "dealloc_func": self.class_dealloc_func_name,
             "type_struct": self.type_struct_name
         }
-        return code
+        return self.format_code(code)
 
     def render_init_func(self):
         code = """
-%(indent)sbool initialize_class_%(name)s(void* vmodule)
-%(indent)s{
-%(indent)s    PyObject* module = reinterpret_cast<PyObject*>(vmodule);
+        bool initialize_class_%(name)s(void* vmodule)
+        {
+            PyObject* module = reinterpret_cast<PyObject*>(vmodule);
 
-%(indent)s    if (0 != PyType_Ready(&%(struct_name)s))
-%(indent)s    {
-%(indent)s        CPPY_ERROR("Failed to readify class %(name)s for Python 3.4 module");
-%(indent)s        return false;
-%(indent)s    }
+            if (0 != PyType_Ready(&%(struct_name)s))
+            {
+                CPPY_ERROR("Failed to readify class %(name)s for Python 3.4 module");
+                return false;
+            }
 
-%(indent)s    PyObject* object = reinterpret_cast<PyObject*>(&%(struct_name)s);
-%(indent)s    Py_INCREF(object);
-%(indent)s    if (0 != PyModule_AddObject(module, "%(name)s", object))
-%(indent)s    {
-%(indent)s        Py_DECREF(object);
-%(indent)s        CPPY_ERROR("Failed to add class %(name)s to Python 3.4 module");
-%(indent)s        return false;
-%(indent)s    }
-%(indent)s    return true;
-%(indent)s}
-"""
+            PyObject* object = reinterpret_cast<PyObject*>(&%(struct_name)s);
+            Py_INCREF(object);
+            if (0 != PyModule_AddObject(module, "%(name)s", object))
+            {
+                Py_DECREF(object);
+                CPPY_ERROR("Failed to add class %(name)s to Python 3.4 module");
+                return false;
+            }
+            return true;
+        }
+        """
         code %= {
             "indent": self.indent(),
             "name": self.name,
             "struct_name": self.type_struct_name
         }
-        return code
+        return self.format_code(code)
 

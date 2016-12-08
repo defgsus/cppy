@@ -1,7 +1,7 @@
 
 """
 CPython's function pointers as dict:
-typename: (return_type, (args,..))
+typename: (return_type, (args,))
 """
 FUNCTIONS = {
     "unaryfunc":            ("PyObject*",   ("PyObject*",)),
@@ -131,7 +131,7 @@ PySequenceMethods = [
     ("sq_repeat",           "ssizeargfunc"),
     ("sq_item",             "ssizeargfunc"),
     ("was_sq_slice",        "void*"),
-    ("sq_ass_items",        "ssizeobjargproc"),
+    ("sq_ass_item",         "ssizeobjargproc"),
     ("was_sq_ass_slice",    "void*"),
     ("sq_contains",         "objobjproc"),
     ("sq_inplace_concat",   "binaryfunc"),
@@ -149,19 +149,28 @@ PyBufferProcs = [
     ("bf_releasebuffer",    "releasebufferproc"),
 ]
 
-
+PyModuleDef = [
+    ("m_name", "const char*"),
+    ("m_doc", "const char*"),
+    ("m_size", "Py_ssize_t"),
+    ("m_methods", "PyMethodDef*"),
+    ("m_reload", "inquiry"),
+    ("m_traverse", "traverseproc"),
+    ("m_clear", "inquiry"),
+    ("m_free", "freefunc"),
+]
 
 SEQUENCE_FUNCS = [
-    ("__len__", "sq_length", "lenfunc"),
-    ("__???__", "sq_concat", "binaryfunc"),
-    ("__???__", "sq_repeat", "ssizeargfunc"),
-    ("__getitem__", "sq_item", "ssizeargfunc"),
-    ("__???___", "was_sq_slice", "void*"),
-    ("__setitem__", "sq_ass_item", "ssizeobjargproc"),
-    ("__???___", "was_sq_ass_slice", "void*"),
-    ("__contains__", "sq_contains", "objobjproc"),
-    ("__???___", "sq_inplace_concat", "binaryfunc"),
-    ("__???___", "sq_inplace_repeat", "ssizeargfunc"),
+    ("__len__",         "sq_length"),
+    ("__???__",         "sq_concat"),
+    ("__???__",         "sq_repeat"),
+    ("__getitem__",     "sq_item"),
+    ("__???___",        "was_sq_slice"),
+    ("__setitem__",     "sq_ass_item"),
+    ("__???___",        "was_sq_ass_slice"),
+    ("__contains__",    "sq_contains"),
+    ("__???___",        "sq_inplace_concat"),
+    ("__???___",        "sq_inplace_repeat"),
 ]
 
 NUMBER_FUNCS = [
@@ -202,10 +211,11 @@ NUMBER_FUNCS = [
 ]
 
 
-SPECIAL_FUNCS = [
+TYPE_FUNCS = [
     ("__str__", "tp_str"),
     ("__repr__", "tp_repr"),
     ("__init__", "tp_init"),
+    ("__eq__", "tp_richcompare")
 ]
 
 # otherwise PyObject*
@@ -218,3 +228,18 @@ SPECIAL_ARGUMENTS = {
     "__getitem__": ", Py_ssize_t index",
     "__setitem__": ", Py_ssize_t index, PyObject* arg",
 }
+
+
+FUNCNAME_TO_STRUCT_MEMBER = dict()
+for i in SEQUENCE_FUNCS + NUMBER_FUNCS + TYPE_FUNCS:
+    FUNCNAME_TO_STRUCT_MEMBER.setdefault(i[0], i[1])
+
+STRUCT_MEMBER_TO_TYPE = dict()
+for i in PyModuleDef + PyBufferProcs + PyMappingMethods + PySequenceMethods + PyNumberMethods + PyTypeObject:
+    STRUCT_MEMBER_TO_TYPE.setdefault(i[0], i[1])
+
+FUNCNAME_TO_TYPE = dict()
+for i in FUNCNAME_TO_STRUCT_MEMBER:
+    mem = FUNCNAME_TO_STRUCT_MEMBER.get(i)
+    if mem in STRUCT_MEMBER_TO_TYPE:
+        FUNCNAME_TO_TYPE.setdefault(i, STRUCT_MEMBER_TO_TYPE[mem])

@@ -57,11 +57,12 @@ class _Exporter:
         self.log("inspecting function %s" % func)
         self.push_scope(func.__name__)
         o = Function(func, class_obj)
-        o.context = self.context
-        if class_obj is None:
-            self.context.append(o)
-        else:
-            class_obj.append(o)
+        if o.has_cpp:
+            o.context = self.context
+            if class_obj is None:
+                self.context.append(o)
+            else:
+                class_obj.append(o)
         self.pop_scope()
 
     def inspect_class(self, cls):
