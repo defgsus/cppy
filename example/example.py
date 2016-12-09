@@ -3,7 +3,7 @@ Example module to demonstrate cppy
 
 _CPP_:
 // This part will be included in the generated .cpp file
-// We pull in some helper functions here because CPython is really low-level..
+// We pull in some helper functions here because CPython is really low-level by itself..
 #include "py_utils.h"
 """
 
@@ -35,21 +35,27 @@ def func_add(a, b):
 
 class Abel:
     """
-    An example to create a embedded class object
+    An example to create an embedded class object
 
     _CPP_:
         // These are c++ members of the class
+        // (Since we are in 'c namespace' they are not constructed by default!)
         std::string* data;
+
     _CPP_(NEW):
         // When object is created we have to initialize all members ourselves
-        CPPY_PRINT("NEW $NAME()");
         data = new std::string();
+        // template tags make life easier
+        // $NAME() resolves to Abel or Kain, when Kain is derived from Abel
+        CPPY_PRINT("NEW $NAME()");
+
     _CPP_(FREE):
         CPPY_PRINT("FREE $NAME()");
         delete data;
+
     _CPP_(COPY):
-        // An internal copy function you can use later
-        // Should copy all members to instance 'copy'
+        // A low-level copy function you can use later
+        // should copy all members to instance 'copy'
         *copy->data = *data;
     """
     member = 1.
@@ -57,12 +63,12 @@ class Abel:
         """
         Constructor, argument can be a string
         _CPP_:
-        // __init__ functions are always called as METH_VARARGS function
-        // so 'arg1' is always a tuple and 'arg2' is a dict with keywords
-        arg1 = removeArgumentTuple(arg1);
-        if (fromPython(arg1, self->data))
+            // __init__ functions are always called as METH_VARARGS function
+            // so 'arg1' is always a tuple and 'arg2' is a dict with keywords
+            arg1 = removeArgumentTuple(arg1);
+            if (fromPython(arg1, self->data))
+                return 0;
             return 0;
-        return 0;
         """
         pass
 
@@ -119,7 +125,7 @@ class Abel:
         A property
         _CPP_:
         // A property is like a normal class function in the c-api
-        return toPython(7.);
+        return toPython((long)(size_t(self) % 23));
         """
         pass
 
@@ -136,13 +142,52 @@ class Kain(Abel):
     """
     A derived class
     All _CPP_ parts are pulled in from base classes
+
+    _CPP_:
+        $STRUCT(Abel)* abel;
+        void setAbel($STRUCT(Abel)* a) { Py_CLEAR(abel); abel = a; }
+
+    _CPP_(NEW):
+        abel = nullptr;
+
+    _CPP_(FREE):
+        Py_CLEAR(abel);
+
+    _CPP_(COPY):
+        copy->abel = abel;
+        Py_XINCREF(copy->abel);
+
     """
+    def __init__(self):
+        """
+        _CPP_:
+            PyObject *a1=0, *a2=0;
+            if (!PyArg_ParseTuple(arg1, "|OO", &a1, &a2))
+                return -1;
+
+            if (a1 && !expectFromPython(a1, self->data))
+                return -1;
+
+            if (a2)
+            {
+                if (!$is_instance(a2, Abel))
+                {
+                    setPythonError(PyExc_TypeError, SStream() << "Invalid argument " << typeName(a1) );
+                    return -1;
+                }
+                self->setAbel($CAST(a2, Abel));
+            }
+            return 0;
+        """
+        pass
+
     def slay(self):
         """
         Slays Abel
         _CPP_:
-        CPPY_PRINT("Kain(" << *self->data << ") slew Abel");
-        Py_RETURN_NONE;
+            CPPY_PRINT("Kain(" << *self->data << ") slew Abel("
+                       << (self->abel ? *self->abel->data : std::string()) << ")" );
+            Py_RETURN_NONE;
         """
         pass
 

@@ -112,7 +112,7 @@ class ExportContext:
         code1 = ""
         prev = 0
         import re
-        for i in re.finditer(r"\$([A-Z_]+)\(([ ]*[A-Za-z_0-9, ]*)\)", code):
+        for i in re.finditer(r"\$([A-Za-z_]+)\(([ ]*[A-Za-z_0-9, ]*)\)", code):
             span = i.span()
             code1 += code[prev:span[0]]
             prev = span[1]
@@ -123,56 +123,70 @@ class ExportContext:
 
     def get_template_arg(self, tag, the_args, for_class):
         """Returns the value for a template tag '$tag(the_args)'"""
-        args = the_args.split(",")
-        args = [x.strip() for x in args]
-        if not args:
-            raise ValueError("No arguments to template tag '%s'" % tag)
+        if the_args:
+            args = the_args.split(",")
+            args = [x.strip() for x in args]
+        else:
+            args = []
 
         class_name = ""
         if for_class:
             class_name = for_class.name
-        if len(args) > 1:
-            class_name = args[-1]
 
         bad_arg = False
 
+        tag = tag.upper();
         if tag == "NAME":
+            if len(args):
+                class_name = args[-1]
             for i in self.classes:
                 if i.name == class_name:
                     return i.name
             bad_arg = True
 
         if tag == "STRUCT":
+            if len(args):
+                class_name = args[-1]
             for i in self.classes:
                 if i.name == class_name:
                     return i.class_struct_name
             bad_arg = True
 
         if tag == "TYPE_STRUCT":
+            if len(args):
+                class_name = args[-1]
             for i in self.classes:
                 if i.name == class_name:
                     return i.type_struct_name
             bad_arg = True
 
         if tag == "NEW":
+            if len(args):
+                class_name = args[-1]
             for i in self.classes:
                 if i.name == class_name:
                     return "%s(&%s,NULL,NULL)" % (i.class_new_func_name, i.type_struct_name)
             bad_arg = True
 
         if tag == "IS_INSTANCE":
+            if len(args) > 1:
+                class_name = args[-1]
             for i in self.classes:
                 if i.name == class_name:
                     return "%s(%s)" % (i.class_is_instance_func_name, args[0])
             bad_arg = True
 
         if tag == "CAST":
+            if len(args) > 1:
+                class_name = args[-1]
             for i in self.classes:
                 if i.name == class_name:
                     return "reinterpret_cast<%s*>(%s)" % (i.class_struct_name, args[0])
             bad_arg = True
 
         if tag == "COPY":
+            if len(args) > 1:
+                class_name = args[-1]
             for i in self.classes:
                 if i.name == class_name:
                     return "%s(%s)" % (i.class_copy_func_name, args[0])

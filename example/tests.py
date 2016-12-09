@@ -1,16 +1,16 @@
 import unittest
-import example as ex
+from example import *
 
 class TestExample(unittest.TestCase):
 
     def test_functions(self):
-        self.assertEqual(444., ex.func_a())
-        self.assertEqual(5., ex.func_add(2,3))
-        self.assertEqual(27., ex.func_add(13,14))
+        self.assertEqual(444., func_a())
+        self.assertEqual(5., func_add(2,3))
+        self.assertEqual(27., func_add(13,14))
 
     def test_init(self):
-        self.assertIsInstance(ex.Abel(), ex.Abel)
-        self.assertIsInstance(ex.Kain(), ex.Kain)
+        self.assertIsInstance(Abel(), Abel)
+        self.assertIsInstance(Kain(), Kain)
 
     def _test_assignment(self, cls):
         self.assertEqual("", cls().get())
@@ -21,8 +21,8 @@ class TestExample(unittest.TestCase):
         self.assertEqual("fetzt", a.get())
 
     def test_assignment(self):
-        self._test_assignment(ex.Abel)
-        self._test_assignment(ex.Kain)
+        self._test_assignment(Abel)
+        self._test_assignment(Kain)
 
 
 
