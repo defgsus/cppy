@@ -29,8 +29,8 @@ class Property(CodeObject):
         self.setter_func_name = "%s_%s_setter" % (self.for_class.name, self.name)
         self.doc_name = "%s_%s_doc" % (self.for_class.name, self.name)
 
-        self.has_getter &= self.has_cpp
-        self.has_setter &= self.has_cpp2
+        self.has_getter &= self.has_cpp() or self.has_cpp("GET")
+        self.has_setter &= self.has_cpp("SET")
 
     def __str__(self):
         return "Property(%s.%s)" % (self.for_class.name, self.name)
@@ -50,8 +50,9 @@ class Property(CodeObject):
             code += 'static const char* %s = "%s";\n' % (self.doc_name, to_c_string(self.doc))
 
         if self.has_getter:
-            code += render_function(self.getter_func_name, "getter", self.cpp, self.for_class)
+            cpp = self.cpp() if self.has_cpp() else self.cpp("GET")
+            code += render_function(self.getter_func_name, "getter", cpp, self.for_class)
         if self.has_setter:
-            code += render_function(self.setter_func_name, "setter", self.cpp2, self.for_class)
+            code += render_function(self.setter_func_name, "setter", self.cpp("SET"), self.for_class)
 
         return self.format_code(code)

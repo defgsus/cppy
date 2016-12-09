@@ -14,7 +14,7 @@ class Class(CodeObject):
         self.functions = []
         self.properties = []
         self.class_struct_name = "%s_struct" % self.name
-        self.type_struct_name = "%s_type_struct" % self.name
+        self.type_struct_name = "%s_type_static_mem" % self.name
         self.method_struct_name = "%s_method_struct" % self.name
         self.number_struct_name = "%s_number_struct" % self.name
         self.mapping_struct_name = "%s_mapping_struct" % self.name
@@ -26,29 +26,24 @@ class Class(CodeObject):
         self.class_is_instance_func_name = "cppy_is_instance_%s" % self.class_struct_name
 
     @property
-    def has_cpp(self):
+    def all_objects(self):
+        return self.functions + self.properties
+
+
+    def has_cpp(self, key=None):
         for i in self.bases:
-            if i.has_cpp:
+            if i.has_cpp(key):
                 return True
-        return self._has_cpp
-    @property
-    def has_cpp2(self):
-        for i in self.bases:
-            if i.has_cpp2:
-                return True
-        return self._has_cpp2
-    @property
-    def cpp(self):
+        return super(Class, self).has_cpp(key)
+
+    def cpp(self, key=None, formatted=True):
         cpp = ""
         for i in self.bases:
-            cpp += i._cpp + "\n"
-        return self.format_code(cpp + "\n" + self._cpp)
-    @property
-    def cpp2(self):
-        cpp = ""
-        for i in self.bases:
-            cpp += i._cpp2 + "\n"
-        return self.format_code(cpp + "\n" + self._cpp2)
+            cpp += i.cpp(key, False) + "\n"
+        cpp += "\n" + super(Class, self).cpp(key, False)
+        if formatted:
+            cpp = self.format_code(cpp)
+        return cpp
 
     def append(self, o):
         if isinstance(o, Function):
@@ -95,7 +90,16 @@ class Class(CodeObject):
             "dealloc_func": self.class_dealloc_func_name,
             "is_instance_func": self.class_is_instance_func_name,
         }
+        for i in self.all_objects:
+            code += "\n" + i.render_forward_decl()
         return self.format_code(code)
+
+    def render_impl_decl(self):
+        return ""
+        #code = ""
+        #for i in self.all_objects:
+        #    code += "\n" + i.render_impl_decl()
+        #return self.format_code(code)
 
     def render_cpp_declaration(self):
         """Renders the complete cpp code to define the class and it's functions"""
@@ -125,6 +129,10 @@ class Class(CodeObject):
         self.pop_indent()
         code += self.indent() + '\n} // extern "C"\n'
         code += self.indent() + "\n" + self.render_init_func()
+        for i in self.all_objects:
+            c = i.render_impl_decl()
+            if c:
+                code += "\n" + c
 
         return code
 
@@ -135,14 +143,30 @@ class Class(CodeObject):
         {
             PyObject_HEAD
 %(decl)s
+            void cppy_new()
+            {
+%(decl_new)s
+            }
+            void cppy_free()
+            {
+%(decl_free)s
+            }
+            void cppy_copy(%(struct_name)s* copy)
+            {
+                CPPY_UNUSED(copy);
+%(decl_copy)s
+            }
         };
         static const char* %(struct_name)s_doc_string = "%(doc)s";
-"""
-        code %= {
+""" % {
             "name": self.name,
             "struct_name": self.class_struct_name,
             "doc": to_c_string(self.doc),
-            "decl": change_text_indent(self.cpp, 12) }
+            "decl": change_text_indent(self.cpp(), 12),
+            "decl_new": change_text_indent(self.cpp("NEW"), 16),
+            "decl_free": change_text_indent(self.cpp("FREE"), 16),
+            "decl_copy": change_text_indent(self.cpp("COPY"), 16),
+        }
         return self.format_code(code)
 
     def render_method_struct(self):
@@ -217,6 +241,8 @@ class Class(CodeObject):
 
     def render_ctor_impl(self):
         code = """
+        /* ###### class %(name)s ###### */
+
         /** Creates new instance of %(name)s class.
             @note Original function signature requires to return PyObject*,
             but here we return the actual %(name)s struct for convenience. */
@@ -246,6 +272,7 @@ class Class(CodeObject):
             return copy;
         }
 
+        /** Wrapper for type checking after declaration of %(type_struct)s */
         bool %(is_instance_func)s(PyObject* arg)
         {
             return PyObject_TypeCheck(arg, &%(type_struct)s);

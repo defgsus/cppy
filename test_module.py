@@ -39,10 +39,15 @@ class Abel:
     """
     Base class
     _CPP_:
-    QString* data;
-    void cppy_new() { MO_PRINT("NEW $NAME()"); data = new QString(); }
-    void cppy_free() { MO_PRINT("FREE $NAME()"); delete data; }
-    void cppy_copy($STRUCT()* c) { *c->data = *data; }
+        QString* data;
+    _CPP_(NEW):
+        MO_PRINT("NEW $NAME()");
+        data = new QString();
+    _CPP_(FREE):
+        MO_PRINT("FREE $NAME()");
+        delete data;
+    _CPP_(COPY):
+        *copy->data = *data;
     """
     member = 1.
     def __init__(self):

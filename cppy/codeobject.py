@@ -1,25 +1,13 @@
+from .renderer import split_doc_cpp
 
 class CodeObject:
     """Base class of 'python things' that have a cpp representation"""
     def __init__(self, name, doc="", src_pos=""):
         self.context = None
         self.name = name
-        self.doc = doc if doc else ""
         self.src_pos = src_pos
-        self._cpp = ""
-        self._cpp2 = ""
         self.module = None
-
-        self._has_cpp = False
-        self._has_cpp2 = False
-        cpp = self.doc.split("_CPP_:")
-        if len(cpp) > 1:
-            self.doc = cpp[0]
-            self._cpp = cpp[1]
-            self._has_cpp = True
-            if len(cpp) > 2:
-                self._cpp2 = cpp[2]
-                self._has_cpp2 = True
+        self.doc, self._cpp = split_doc_cpp(doc) if doc else ("", {})
 
     def __str__(self):
         return "%s" % self.name
@@ -38,18 +26,15 @@ class CodeObject:
         """Implementation that need final definition of all type structs, etc.."""
         return ""
 
-    @property
-    def has_cpp(self):
-        return self._has_cpp
-    @property
-    def has_cpp2(self):
-        return self._has_cpp2
-    @property
-    def cpp(self):
-        return self.format_code(self._cpp)
-    @property
-    def cpp2(self):
-        return self.format_code(self._cpp2)
+
+    def has_cpp(self, key=None):
+        return True if key in self._cpp and self._cpp[key] else False
+
+    def cpp(self, key=None, formated=True):
+        if formated:
+            return self.format_code(self._cpp[key]) if key in self._cpp else ""
+        else:
+            return self._cpp[key] if key in self._cpp else ""
 
     def render_cpp_declaration(self):
         raise NotImplementedError

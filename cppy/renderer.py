@@ -46,6 +46,36 @@ def change_text_indent(code, len):
             code += pre + li + "\n"
     return code
 
+def split_doc_cpp(text):
+    """
+    Splits the text into a doc part and a dict of CPP annotations
+    :param text:
+    :return: tuple (str, dict)
+    """
+    if not "_CPP_" in text:
+        return (text, {})
+    doc_end = 0
+    idxs = []
+    import re
+    for i in re.finditer(r"_CPP_(\([A-Za-z]*\))?:", text):
+        if not doc_end:
+            doc_end = i.start()
+        if i.groups():
+            key = i.groups()[0]
+            if key:
+                key = key.replace("(", "").replace(")", "").upper()
+            idxs.append((key, i.start(), i.end()))
+
+    dic = {}
+    for i, x in enumerate(idxs):
+        end = len(text)
+        if i+1 < len(idxs):
+            end = idxs[i+1][1]
+        dic.setdefault(x[0], strip_newlines(text[x[2]:end]))
+
+    return (text[:doc_end].strip(), dic)
+
+
 
 def render_func_def(name, type):
     if not type in FUNCTIONS:
@@ -254,7 +284,9 @@ class Renderer:
         self.context.push_indent()
         code += self._render_module_def()
         self.context.pop_indent()
-        code += "\n/* ##### c-api wrapper implementation ##### */\n" + self._render_impl_decl()
+        c = self._render_impl_decl()
+        if c:
+            code += "\n/* ##### c-api wrapper implementation ##### */\n" + c
         code += '} // extern "C"\n'
         code += "\n} // namespace\n"
         code += "\n" + self._render_module_init()

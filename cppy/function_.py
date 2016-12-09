@@ -135,7 +135,7 @@ class Function(CodeObject):
             "doc": doc
         }
         func_type = FUNCNAME_TO_TYPE.get(self.name, "binaryfunc")
-        code += render_function(self.func_name, func_type, self.cpp, self.for_class)
+        code += render_function(self.func_name, func_type, self.cpp(), self.for_class)
 
         return self.format_code(code)
 
