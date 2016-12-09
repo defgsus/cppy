@@ -1,7 +1,7 @@
 import inspect
 from .codeobject import *
 from .renderer import *
-from .function import *
+from .function_ import *
 from .class_ import *
 
 class ExportContext:
@@ -73,7 +73,7 @@ class ExportContext:
     def indent_length(self):
         return self.indent_level * 4
 
-    def format_cpp(self, code):
+    def format_cpp(self, code, for_object):
         """Applies template replacement"""
         code1 = ""
         prev = 0
@@ -82,19 +82,31 @@ class ExportContext:
             span = i.span()
             code1 += code[prev:span[0]]
             prev = span[1]
-            code1 += self.get_template_arg(i.groups()[0], i.groups()[1])
+            code1 += self.get_template_arg(i.groups()[0], i.groups()[1], for_object)
         code1 += code[prev:]
         code = strip_newlines(code1)
         return change_text_indent(code, self.indent_length())
 
-    def get_template_arg(self, tag, the_args):
+    def get_template_arg(self, tag, the_args, for_class):
         """Returns the value for a template tag '$tag(name)'"""
         args = the_args.split(",")
         args = [x.strip() for x in args]
         if not args:
             raise ValueError("No arguments to template tag '%s'" % tag)
-        class_name = args[-1]
+
+        class_name = ""
+        if for_class:
+            class_name = for_class.name
+        if len(args) > 1:
+            class_name = args[-1]
+
         bad_arg = False
+
+        if tag == "NAME":
+            for i in self.classes:
+                if i.name == class_name:
+                    return i.name
+            bad_arg = True
 
         if tag == "STRUCT":
             for i in self.classes:
@@ -115,21 +127,25 @@ class ExportContext:
             bad_arg = True
 
         if tag == "IS_INSTANCE":
-            class_name = args[1]
             for i in self.classes:
                 if i.name == class_name:
                     return "%s(%s)" % (i.class_is_instance_func_name, args[0])
-            raise ValueError("$IS_INSTANCE for %s not known" % class_name)
+            bad_arg = True
+
+        if tag == "CAST":
+            for i in self.classes:
+                if i.name == class_name:
+                    return "reinterpret_cast<%s*>(%s)" % (i.class_struct_name, args[0])
+            bad_arg = True
 
         if tag == "COPY":
-            class_name = args[1]
             for i in self.classes:
                 if i.name == class_name:
                     return "%s(%s)" % (i.class_copy_func_name, args[0])
             bad_arg = True
 
         if bad_arg:
-            raise ValueError("Bad arguments '%s' to template tag '%s'" % (class_name, tag))
+            raise ValueError("Bad arguments '%s' to template tag '%s' (object:%s)" % (the_args, tag, class_name))
         raise ValueError("Unknown template tag '%s'" % tag)
 
 

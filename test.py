@@ -6,10 +6,10 @@ import cppy.compiler
 def doit():
     #import pector
     #objs = cppy.compiler.compile(pector)
-    import vec3
-    objs = cppy.compiler.compile(vec3)
-    #import test_module
-    #objs = cppy.compiler.compile(test_module)
+    #import vec3
+    #objs = cppy.compiler.compile(vec3)
+    import test_module
+    objs = cppy.compiler.compile(test_module)
 
     objs.context.dump()
 

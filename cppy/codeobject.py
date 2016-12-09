@@ -24,12 +24,12 @@ class CodeObject:
     def pop_indent(self): self.context.pop_indent()
     def indent(self): return self.context.indent()
     def indent_length(self): return self.context.indent_length()
-    def format_code(self, code): return self.context.format_cpp(code)
+    def format_code(self, code): return self.context.format_cpp(code, self)
 
     def get_cpp(self, alternative=None):
         if not alternative:
             alternative = self.cpp
-        return self.context.format_cpp(alternative) if alternative else ""
+        return self.format_code(alternative) if alternative else ""
 
     def render_cpp_declaration(self):
         raise NotImplementedError

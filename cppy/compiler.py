@@ -1,7 +1,7 @@
 from .context import *
 from .renderer import *
 from .class_ import Class
-from .function import Function
+from .function_ import Function
 from .property_ import Property
 
 class _Exporter:

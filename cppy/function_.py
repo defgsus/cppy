@@ -32,6 +32,9 @@ class Function(CodeObject):
         else:
             return "Function(%s)" % self.name
 
+    def format_code(self, code):
+        return self.context.format_cpp(code, self.for_class)
+
     def is_normal_function(self):
         """Returns True if this function should go into the general PyMethodDef"""
         if not self.for_class:
@@ -99,26 +102,29 @@ class Function(CodeObject):
             return str
         return "PyObject* arg0" + self.get_args_data()[2]
 
-    # TODO: THis is messed up!
     def get_args_data(self):
         if self.args.varargs and len(self.args.varargs):
-            return ("PyFunctionWithKeywords", "METH_VARARGS", ", PyObject* arg1, PyObject* kwargs",)
+            return ("PyFunctionWithKeywords", "METH_VARARGS")
 
         if self.for_class:
-            if self.name == "__init__":
-                return ("PyFunctionWithKeywords", "METH_VARARGS", ", PyObject* arg1, PyObject* kwargs",)
+            # TODO: The __init__ func is not part of the normal PyMethodDef and has a special
+            # signature anyway. This is covered somewhere else
+            #if self.name == "__init__":
+            #    return ("PyFunctionWithKeywords", "METH_VARARGS")
             num_args = len(self.args.args)
             if not num_args:
                 raise TypeError("class method %s has no parameters" % self.name)
             if num_args == 1:
-                return ("PyCFunction", "METH_NOARGS", "",)
+                return ("PyCFunction", "METH_NOARGS")
+            elif num_args == 2:
+                return ("PyCFunction", "METH_O")
             else:
-                return ("PyCFunction", "METH_VARARGS", ", PyObject* arg1",)
+                return ("PyCFunction", "METH_VARARGS")
 
         if len(self.args.args) == 1:
-            return ("PyCFunction", "METH_O", ", PyObject* arg", )
+            return ("PyCFunction", "METH_O")
         if len(self.args.args) > 1:
-            return ("PyCFunction", "METH_VARARGS", ", PyObject* args",)
+            return ("PyCFunction", "METH_VARARGS")
 
         return ("PyNoArgsFunction", "METH_NOARGS", "")
 

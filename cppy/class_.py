@@ -1,5 +1,5 @@
 import inspect
-from .function import *
+from .function_ import *
 from .renderer import *
 
 class Class(CodeObject):
@@ -184,15 +184,25 @@ class Class(CodeObject):
 
     def render_ctor_impl(self):
         code = """
-        /* create new instance of %(name)s class */
+        /** Creates new instance of %(name)s class.
+            @note Original function signature requires to return PyObject*,
+            but here we return the actual %(name)s struct for convenience. */
         %(struct_name)s* %(new_func)s(struct _typeobject *, PyObject* , PyObject* )
         {
-            return PyObject_New(%(struct_name)s, &%(type_struct)s);
+            auto o = PyObject_New(%(struct_name)s, &%(type_struct)s);
+            // Needs to be implemented by user in class %(name)s's cpp annotation
+            o->cppy_new();
+            return o;
         }
+
+        /** Deletes a %(name)s instance */
         void %(dealloc_func)s(PyObject* self)
         {
+            // Needs to be implemented by user in class %(name)s's cpp annotation
+            reinterpret_cast<%(struct_name)s*>(self)->cppy_free();
             self->ob_type->tp_free(self);
         }
+
         /** Makes a copy of the %(name)s instance @p self,
             using user-supplied %(struct_name)s::cppy_copy() */
         %(struct_name)s* %(copy_func)s(%(struct_name)s* self)
@@ -202,6 +212,7 @@ class Class(CodeObject):
             self->cppy_copy(copy);
             return copy;
         }
+
         bool %(is_instance_func)s(PyObject* arg)
         {
             return PyObject_TypeCheck(arg, &%(type_struct)s);

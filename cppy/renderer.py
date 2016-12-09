@@ -172,7 +172,7 @@ class Renderer:
                   "namespace_open": self._render_namespace_open(),
                   "namespace_close": self._render_namespace_close(),
                   }
-        return self.context.format_cpp(code)
+        return self.context.format_cpp(code, None)
 
 
     def render_cpp(self):
@@ -220,8 +220,8 @@ class Renderer:
         code %= {
             "date": datetime.datetime.now(),
             "static_asserts" : self._render_static_asserts(),
-            "header": self.context.format_cpp(self.cpp_header),
-            "decl": self.context.format_cpp(self.context.cpp),
+            "header": self.context.format_cpp(self.cpp_header, None),
+            "decl": self.context.format_cpp(self.context.cpp, None),
             "forwards": forwards,
             "namespace_open": self._render_namespace_open(),
             "namespace_close": self._render_namespace_close(),
@@ -266,25 +266,25 @@ class Renderer:
                 parstr += ", %s" % params[1][j]
             typedef = "%(ret)s(*)(%(params)s)" % { "ret": params[0], "params": parstr }
             code += 'static_assert(std::is_same<%s,\n    %s>::value, "cppy/python api mismatch");\n' % (functype, typedef)
-        return self.context.format_cpp(code)
+        return self.context.format_cpp(code, None)
 
     def _render_forwards(self):
         code = ""
         for i in self.classes:
             code += "\n" + i.render_forwards()
-        return self.context.format_cpp(code)
+        return self.context.format_cpp(code, None)
 
     def _render_namespace_open(self):
         code = ""
         for i in self.namespaces:
             code += "namespace %s {\n" % i
-        return self.context.format_cpp(code)
+        return self.context.format_cpp(code, None)
 
     def _render_namespace_close(self):
         code = ""
         for i in reversed(self.namespaces):
             code += "} // namespace %s\n" % i
-        return self.context.format_cpp(code)
+        return self.context.format_cpp(code, None)
 
     def _render_module_init(self):
         code = """
@@ -319,7 +319,7 @@ bool initialize_module_%(name)s()
             "init_calls": init_calls
         }
 
-        return self.context.format_cpp(code)
+        return self.context.format_cpp(code, None)
 
     def _render_module_def(self):
         dic = { "name": self.context.name,
@@ -335,11 +335,11 @@ bool initialize_module_%(name)s()
         code = """/* module definition for '%(name)s' */\nstatic const char* %(m_doc)s = "%(doc)s";\n""" % dic
         code += render_struct("PyModuleDef", PyModuleDef, dic["struct_name"], dic,
                               first_line="PyModuleDef_HEAD_INIT,")
-        return self.context.format_cpp(code)
+        return self.context.format_cpp(code, None)
 
     def _render_method_struct(self):
         code = "static PyMethodDef %s[] =\n{\n" % self.context.method_struct_name
         for i in self.functions:
             code += "    " + i.render_cpp_member_struct_entry()
         code += "\n    { NULL, NULL, 0, NULL }\n};\n"
-        return self.context.format_cpp(code)
+        return self.context.format_cpp(code, None)

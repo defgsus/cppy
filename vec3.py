@@ -162,14 +162,7 @@ class vec3:
         :param other: float sequence of length 3
         :return: True or False
         _CPP_:
-        MO_PRINT("RICHCOMP " << arg2);
-        double v[self->len];
-        if (!expectFromPythonSequence(arg1, v, self->len))
-            return NULL;
-        for (size_t i=0; i<self->len; ++i)
-            if (self->v[i] != v[i])
-                Py_RETURN_FALSE;
-        Py_RETURN_TRUE;
+        return vectorRichCompare(self, arg1, arg2);
         """
         if isinstance(other, vec3):
             return self.v == other.v
