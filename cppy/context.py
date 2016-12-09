@@ -84,7 +84,7 @@ class ExportContext:
     def _resolve_base_classes(self):
         for i in self.classes:
             i.bases = []
-            print(i.name, i.the_class.__bases__)
+            #print(i.name, i.the_class.__bases__)
             for j in i.the_class.__bases__:
                 name = j.__name__
                 if not "builtins.object" in name and not name == "object":

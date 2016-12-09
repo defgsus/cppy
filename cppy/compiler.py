@@ -14,7 +14,8 @@ class _Exporter:
         self.context = None
 
     def log(self, str):
-        print("  " * len(self.scope_stack) + str)
+        if 0:
+            print("  " * len(self.scope_stack) + str)
 
     def scope_name(self):
         return self.scope_stack[-1] if self.scope_stack else ""

@@ -1,10 +1,10 @@
+"""
+Example module to demonstrate cppy
 
-__doc__ = """
-Test module desc.
-Bladiblubb
 _CPP_:
+// This part will be included in the generated .cpp file
+// We pull in some helper functions here because CPython is really low-level..
 #include "py_utils.h"
-#include "io/log.h"
 """
 
 CONSTANT1 = 1
@@ -13,46 +13,52 @@ CONSTANT2 = 2
 
 def func_a():
     """
-    Returns 1.
-    :return: float
+    func_a() -> float
+    Returns 444.
     _CPP_:
     return toPython(444.);
     """
-    return 1.
+    pass
 
 def func_add(a, b):
     """
+    func_add(float, float) -> float
     Adds two numbers
-    :param a: any number
-    :param b: any number
-    :return: float
     _CPP_:
     double a, b;
     if (!PyArg_ParseTuple(arg1, "dd", &a, &b))
         return NULL;
     return toPython(a+b);
     """
-    return float(a + b)
+    pass
 
 
 class Abel:
     """
-    Base class
+    An example to create a embedded class object
+
     _CPP_:
-        QString* data;
+        // These are c++ members of the class
+        std::string* data;
     _CPP_(NEW):
-        MO_PRINT("NEW $NAME()");
-        data = new QString();
+        // When object is created we have to initialize all members ourselves
+        CPPY_PRINT("NEW $NAME()");
+        data = new std::string();
     _CPP_(FREE):
-        MO_PRINT("FREE $NAME()");
+        CPPY_PRINT("FREE $NAME()");
         delete data;
     _CPP_(COPY):
+        // An internal copy function you can use later
+        // Should copy all members to instance 'copy'
         *copy->data = *data;
     """
     member = 1.
-    def __init__(self):
+    def __init__(self, arg):
         """
+        Constructor, argument can be a string
         _CPP_:
+        // __init__ functions are always called as METH_VARARGS function
+        // so 'arg1' is always a tuple and 'arg2' is a dict with keywords
         arg1 = removeArgumentTuple(arg1);
         if (fromPython(arg1, self->data))
             return 0;
@@ -62,9 +68,13 @@ class Abel:
 
     def __eq__(self, other):
         """
+        Test for equality of content
         _CPP_:
         if (!$IS_INSTANCE(arg1))
-            { setPythonError(PyExc_TypeError, QString("Expected $NAME(), got %1").arg(typeName(arg1))); return NULL; }
+        {
+            setPythonError(PyExc_TypeError, SStream() << "Expected $NAME(), got " << typeName(arg1));
+            return NULL;
+        }
         return toPython(*self->data == *($CAST(arg1)->data));
         """
         pass
@@ -72,19 +82,21 @@ class Abel:
     def __repr__(self):
         """
         _CPP_:
-        return toPython(QString("$NAME()@%1").arg(size_t(self),0,16));
+        return toPython(SStream() << "$NAME()@" << (void*)self);
         """
         pass
 
     def __str__(self):
         """
         _CPP_:
-        return toPython(QString("$NAME()(\\"%1\\")").arg(*self->data) );
+        return toPython(SStream() << "$NAME()(\\"" << *self->data << "\\")");
         """
         pass
 
     def copy(self):
         """
+        copy() -> Abel
+        Returns a copy of the object
         _CPP_:
         return (PyObject*)$COPY(self);
         """
@@ -92,6 +104,8 @@ class Abel:
 
     def set(self, arg):
         """
+        set(string) -> self
+        Sets the contents of the object
         _CPP_:
         if (!expectFromPython(arg1, self->data))
             return NULL;
@@ -102,29 +116,32 @@ class Abel:
     @property
     def wisdom(self):
         """
-        This property is amazing
+        A property
         _CPP_:
+        // A property is like a normal class function in the c-api
         return toPython(7.);
         """
         pass
 
     def get(self):
         """
+        get() -> string
         Returns the contents as string
         _CPP_:
         return toPython(self->data);
         """
 
+
 class Kain(Abel):
     """
-    Derived class
+    A derived class
+    All _CPP_ parts are pulled in from base classes
     """
-    member = 2.
     def slay(self):
         """
         Slays Abel
         _CPP_:
-        MO_PRINT("Kain slew Abel");
+        CPPY_PRINT("Kain(" << *self->data << ") slew Abel");
         Py_RETURN_NONE;
         """
         pass

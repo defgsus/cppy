@@ -1,7 +1,6 @@
-# c++
-*.cpp
-*.hpp
-*.h
+# example-dir
+*.o
+python-mod
 
 # intellij/pycharm
 .idea/
