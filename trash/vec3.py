@@ -125,7 +125,7 @@ class vec3:
         """
         _CPP_:
         CPPY_UNUSED(self);
-        return 3;
+        return self->len;
         """
         return 3
 

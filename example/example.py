@@ -128,7 +128,7 @@ class Abel:
         get() -> string
         Returns the contents as string
         _CPP_:
-        return toPython(self->data);
+        return toPython(*self->data);
         """
 
 
