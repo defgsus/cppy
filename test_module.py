@@ -113,11 +113,6 @@ class Abel:
 class Kain(Abel):
     """
     Derived class
-    _CPP_:
-    QString* data;
-    void cppy_new() { MO_PRINT("NEW"); data = new QString(); }
-    void cppy_free() { MO_PRINT("FREE"); delete data; }
-    void cppy_copy($STRUCT()* c) { c->data = data; }
     """
     member = 2.
     def slay(self):

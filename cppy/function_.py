@@ -20,11 +20,6 @@ class Function(CodeObject):
             self.func_name = "cppy_%s" % self.name
         # self.doc += "\n" + str(self.args)
 
-        self.has_cpp = True
-        if not self.cpp:
-            self.has_cpp = False
-            self.cpp = "#error %s not implemented" % self.name
-            #self.cpp = "Py_RETURN_NOTIMPLEMENTED;"
 
     def __str__(self):
         if self.for_class:
@@ -140,7 +135,7 @@ class Function(CodeObject):
             "doc": doc
         }
         func_type = FUNCNAME_TO_TYPE.get(self.name, "binaryfunc")
-        code += render_function(self.func_name, func_type, self.get_cpp(), self.for_class)
+        code += render_function(self.func_name, func_type, self.cpp, self.for_class)
 
         return self.format_code(code)
 

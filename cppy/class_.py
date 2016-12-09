@@ -10,6 +10,7 @@ class Class(CodeObject):
             doc=inspect.getdoc(the_class)
         )
         self.the_class = the_class
+        self.bases = []
         self.functions = []
         self.properties = []
         self.class_struct_name = "%s_struct" % self.name
@@ -24,8 +25,33 @@ class Class(CodeObject):
         self.class_dealloc_func_name = "cppy_dealloc_%s" % self.class_struct_name
         self.class_is_instance_func_name = "cppy_is_instance_%s" % self.class_struct_name
 
+    @property
+    def has_cpp(self):
+        for i in self.bases:
+            if i.has_cpp:
+                return True
+        return self._has_cpp
+    @property
+    def has_cpp2(self):
+        for i in self.bases:
+            if i.has_cpp2:
+                return True
+        return self._has_cpp2
+    @property
+    def cpp(self):
+        cpp = ""
+        for i in self.bases:
+            cpp += i._cpp + "\n"
+        return self.format_code(cpp + "\n" + self._cpp)
+    @property
+    def cpp2(self):
+        cpp = ""
+        for i in self.bases:
+            cpp += i._cpp2 + "\n"
+        return self.format_code(cpp + "\n" + self._cpp2)
+
     def append(self, o):
-        if isinstance(o, Function) and o.cpp:
+        if isinstance(o, Function):
             self.functions.append(o)
 
     def has_function(self, name):
@@ -51,6 +77,25 @@ class Class(CodeObject):
             if self.has_function(i[0]):
                 return True
         return False
+
+    def render_forward_decl(self):
+        code = """
+        /* %(name)s forward decl */
+        struct %(struct_name)s;
+        static %(struct_name)s* %(new_func)s(struct _typeobject *, PyObject *, PyObject *);
+        static void %(dealloc_func)s(PyObject* self);
+        static %(struct_name)s* %(copy_func)s(%(struct_name)s* self);
+        static bool %(is_instance_func)s(PyObject* arg);
+        """
+        code %= {
+            "name": self.name,
+            "struct_name": self.class_struct_name,
+            "new_func": self.class_new_func_name,
+            "copy_func": self.class_copy_func_name,
+            "dealloc_func": self.class_dealloc_func_name,
+            "is_instance_func": self.class_is_instance_func_name,
+        }
+        return self.format_code(code)
 
     def render_cpp_declaration(self):
         """Renders the complete cpp code to define the class and it's functions"""
@@ -83,10 +128,6 @@ class Class(CodeObject):
 
         return code
 
-    def render_forwards(self):
-        code = """struct %s;\n""" % self.class_struct_name
-        return self.format_code(code)
-
     def render_class_struct(self):
         code = """
         /* class '%(name)s' */
@@ -95,19 +136,11 @@ class Class(CodeObject):
             PyObject_HEAD
 %(decl)s
         };
-        static %(struct_name)s* %(new_func)s(struct _typeobject *, PyObject *, PyObject *);
-        static void %(dealloc_func)s(PyObject* self);
-        static %(struct_name)s* %(copy_func)s(%(struct_name)s* self);
-        static bool %(is_instance_func)s(PyObject* arg);
         static const char* %(struct_name)s_doc_string = "%(doc)s";
 """
         code %= {
             "name": self.name,
             "struct_name": self.class_struct_name,
-            "new_func": self.class_new_func_name,
-            "copy_func": self.class_copy_func_name,
-            "dealloc_func": self.class_dealloc_func_name,
-            "is_instance_func": self.class_is_instance_func_name,
             "doc": to_c_string(self.doc),
             "decl": change_text_indent(self.cpp, 12) }
         return self.format_code(code)

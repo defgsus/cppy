@@ -192,10 +192,12 @@ class Renderer:
         #   define CPPY_UNUSED(arg__) (void)arg__
         #endif
 
+        /* compatibility checks */
         %(static_asserts)s
 
         %(namespace_open)s
 
+        /* forwards */
         namespace {
         extern "C" {
         %(forwards)s
@@ -204,10 +206,13 @@ class Renderer:
 
         %(namespace_close)s
 
-        %(decl)s
-
+        /* declarations from configuration */
         %(header)s
 
+        /* user declarations */
+        %(decl)s
+
+        /* python c-api tango */
         %(namespace_open)s
         namespace {
         """
@@ -249,11 +254,12 @@ class Renderer:
         self.context.push_indent()
         code += self._render_module_def()
         self.context.pop_indent()
+        code += "\n/* ##### c-api wrapper implementation ##### */\n" + self._render_impl_decl()
         code += '} // extern "C"\n'
         code += "\n} // namespace\n"
         code += "\n" + self._render_module_init()
         code += "\n" + self._render_namespace_close()
-        code += "\n" + self.cpp_footer
+        code += "\n/* footer from configuration */\n" + self.cpp_footer
         return code
 
 
@@ -270,8 +276,14 @@ class Renderer:
 
     def _render_forwards(self):
         code = ""
-        for i in self.classes:
-            code += "\n" + i.render_forwards()
+        for i in self.context.all_objects:
+            code += "\n" + i.render_forward_decl()
+        return self.context.format_cpp(code, None)
+
+    def _render_impl_decl(self):
+        code = ""
+        for i in self.context.all_objects:
+            code += "\n" + i.render_impl_decl()
         return self.context.format_cpp(code, None)
 
     def _render_namespace_open(self):

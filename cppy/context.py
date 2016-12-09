@@ -55,6 +55,40 @@ class ExportContext:
                 for i in clas.properties:
                     print("   ", i)
 
+    def finalize(self):
+        """To be called after all CodeObjects are added"""
+        # first resolve all base classes so we can fetch cpp annotation from bases
+        self._resolve_base_classes()
+        # remove all objects from export who aren't annotated
+        self.functions = self._clear_unused(self.functions)
+        self.classes = self._clear_unused(self.classes)
+        for i in self.classes:
+            i.functions = self._clear_unused(i.functions)
+            i.properties = self._clear_unused(i.properties)
+
+        self.all_objects = self.functions + self.classes
+
+    def _clear_unused(self, objs):
+        ret = []
+        for i in objs:
+            if i.has_cpp:
+                ret.append(i)
+        return ret
+
+    def get_class(self, name):
+        for i in self.classes:
+            if i.name == name:
+                return i
+        raise RuntimeError("Required base class '%s' not found" % name)
+
+    def _resolve_base_classes(self):
+        for i in self.classes:
+            i.bases = []
+            print(i.name, i.the_class.__bases__)
+            for j in i.the_class.__bases__:
+                name = j.__name__
+                if not "builtins.object" in name and not name == "object":
+                    i.bases.append(self.get_class(name))
 
     def push_indent(self):
         self.indent_level += 1
@@ -88,7 +122,7 @@ class ExportContext:
         return change_text_indent(code, self.indent_length())
 
     def get_template_arg(self, tag, the_args, for_class):
-        """Returns the value for a template tag '$tag(name)'"""
+        """Returns the value for a template tag '$tag(the_args)'"""
         args = the_args.split(",")
         args = [x.strip() for x in args]
         if not args:

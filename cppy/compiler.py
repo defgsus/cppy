@@ -37,6 +37,7 @@ class _Exporter:
         self.push_scope(mod_name)
         self.inspect_names(module, dir(module))
         self.pop_scope()
+        self.context.finalize()
 
     def inspect_names(self, parent, names):
         self.log("scanning names in %s" % type(parent))
@@ -64,19 +65,17 @@ class _Exporter:
         self.log("inspecting function %s" % func)
         self.push_scope(func.__name__)
         o = Function(func, class_obj)
-        if o.has_cpp:
-            o.context = self.context
-            if class_obj is None:
-                self.context.append(o)
-            else:
-                class_obj.append(o)
+        o.context = self.context
+        if class_obj is None:
+            self.context.append(o)
+        else:
+            class_obj.append(o)
         self.pop_scope()
 
     def inspect_property(self, prop, class_obj):
         p = Property(prop, class_obj)
-        if p.has_cpp:
-            p.context = self.context
-            class_obj.properties.append(p)
+        p.context = self.context
+        class_obj.properties.append(p)
 
     def inspect_class(self, cls):
         self.log("inspecting class %s" % cls)
