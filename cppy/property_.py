@@ -35,16 +35,24 @@ class Property(CodeObject):
     def __str__(self):
         return "Property(%s.%s)" % (self.for_class.name, self.name)
 
+    def render_header_forwards(self):
+        """Stuff that needs to be known by all other code in the .h file"""
+        return ""
 
-    def render_cpp_getset_struct_entry(self):
-        return '{ (char*)"%s", (getter)%s, (setter)%s, (char*)%s, (void*)NULL },\n' % (
-            self.name,
-            self.getter_func_name if self.has_getter else "NULL",
-            self.setter_func_name if self.has_setter else "NULL",
-            self.doc_name if self.doc else "NULL",
-        )
+    def render_header_impl(self):
+        """Stuff that implements stuff in the .h file"""
+        return ""
 
-    def render_cpp_declaration(self):
+    def render_forwards(self):
+        """Stuff that needs to be known by all other code in .cpp file"""
+        return ""
+
+    def render_impl(self):
+        """Implementation that need final definition of all type structs, etc.."""
+        return ""
+
+    def render_python_api(self):
+        """The general python c-api constructs"""
         code = ""
         if self.doc:
             code += 'static const char* %s = "%s";\n' % (self.doc_name, to_c_string(self.doc))
@@ -56,3 +64,11 @@ class Property(CodeObject):
             code += render_function(self.setter_func_name, "setter", self.cpp("SET"), self.for_class)
 
         return self.format_code(code)
+
+    def render_cpp_getset_struct_entry(self):
+        return '{ (char*)"%s", (getter)%s, (setter)%s, (char*)%s, (void*)NULL },\n' % (
+            self.name,
+            self.getter_func_name if self.has_getter else "NULL",
+            self.setter_func_name if self.has_setter else "NULL",
+            self.doc_name if self.doc else "NULL",
+        )

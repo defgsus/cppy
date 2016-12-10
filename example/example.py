@@ -1,10 +1,14 @@
 """
 Example module to demonstrate cppy
 
+_CPP_(HEADER):
+    // This part will be included in the generated .h file
+    // We pull in some helper functions here because CPython is really low-level by itself..
+    #include "py_utils.h"
+
 _CPP_:
-// This part will be included in the generated .cpp file
-// We pull in some helper functions here because CPython is really low-level by itself..
-#include "py_utils.h"
+    // This part will be included in the generated .cpp file
+    using namespace PyUtils;
 """
 
 CONSTANT1 = 1
@@ -88,14 +92,14 @@ class Abel:
     def __repr__(self):
         """
         _CPP_:
-        return toPython(SStream() << "$NAME()@" << (void*)self);
+        return SStream() << "$NAME()@" << (void*)self;
         """
         pass
 
     def __str__(self):
         """
         _CPP_:
-        return toPython(SStream() << "$NAME()(\\"" << *self->data << "\\")");
+        return SStream() << "$NAME()(\\"" << *self->data << "\\")";
         """
         pass
 
@@ -137,6 +141,15 @@ class Abel:
         return toPython(*self->data);
         """
 
+    def spawn(self):
+        """
+        Spawn new instance of a Kain
+        _CPP_:
+            auto k = $NEW(Kain);
+            *k->data = "from_" + *self->data;
+            k->setAbel(self);
+            return (PyObject*)k;
+        """
 
 class Kain(Abel):
     """
@@ -144,13 +157,19 @@ class Kain(Abel):
     All _CPP_ parts are pulled in from base classes
 
     _CPP_:
+        // Again, template tags help a lot.
+        // STRUCT(classname) gets you the struct name of any class known to cppy
         $STRUCT(Abel)* abel;
-        void setAbel($STRUCT(Abel)* a) { Py_CLEAR(abel); abel = a; }
+
+        // A function to set the Abel class as member of Kain
+        void setAbel($STRUCT(Abel)* a) { Py_CLEAR(abel); abel = a; Py_XINCREF(abel); }
 
     _CPP_(NEW):
+        // Initialize memory
         abel = nullptr;
 
     _CPP_(FREE):
+        // The recommended method to give away a reference
         Py_CLEAR(abel);
 
     _CPP_(COPY):
@@ -190,4 +209,13 @@ class Kain(Abel):
             Py_RETURN_NONE;
         """
         pass
+
+    def spawn(self):
+        """
+        Spawn new instance of an Abel
+        _CPP_:
+            auto a = $NEW(Abel);
+            *a->data = "from_" + *self->data;
+            return (PyObject*)a;
+        """
 

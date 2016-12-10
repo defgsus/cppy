@@ -4,30 +4,23 @@ from .renderer import *
 from .function_ import *
 from .class_ import *
 
-class ExportContext:
+
+class ExportContext(DocObject):
     """
     Class holding all code objects and the template-context
     """
     def __init__(self, module):
+        super(ExportContext, self).__init__(inspect.getdoc(module))
         self.module = module
         self.functions = []
         self.classes = []
         self.name = module.__name__
         self.struct_name = "cppy_module_%s" % self.name
         self.method_struct_name = "cppy_module_methods_%s" % self.name
-        self.doc = inspect.getdoc(module)
-        self.doc = self.doc if self.doc else ""
         self.indent_level = 0
 
-        self.cpp = ""
-        self.cpp2 = ""
-
-        cpp = self.doc.split("_CPP_:")
-        if len(cpp) > 1:
-            self.doc = cpp[0]
-            self.cpp = cpp[1]
-            if len(cpp) > 2:
-                self.cpp2 = cpp[2]
+    def format_code(self, code):
+        return self.format_cpp(code, None)
 
     def append(self, o):
         """Append a CodeObject"""
@@ -165,7 +158,7 @@ class ExportContext:
                 class_name = args[-1]
             for i in self.classes:
                 if i.name == class_name:
-                    return "%s(&%s,NULL,NULL)" % (i.class_new_func_name, i.type_struct_name)
+                    return "%s()" % i.class_new_func_name
             bad_arg = True
 
         if tag == "IS_INSTANCE":

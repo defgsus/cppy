@@ -1,5 +1,8 @@
 #include "py_utils.h"
 
+namespace PyUtils {
+
+
 PyObject* toPython(const std::string& s)
 {
     return PyUnicode_FromString(s.data());
@@ -305,4 +308,4 @@ void dumpObject(PyObject* arg, bool introspect)
 #undef CPPY__PRINTPY
 }
 
-
+} // namespace PyUtils

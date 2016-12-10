@@ -1,6 +1,8 @@
-# example-dir
+# example-build
 *.o
 python-mod
+build-*/
+*.pro.user
 
 # intellij/pycharm
 .idea/

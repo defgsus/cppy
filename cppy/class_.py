@@ -29,7 +29,6 @@ class Class(CodeObject):
     def all_objects(self):
         return self.functions + self.properties
 
-
     def has_cpp(self, key=None):
         for i in self.bases:
             if i.has_cpp(key):
@@ -73,14 +72,34 @@ class Class(CodeObject):
                 return True
         return False
 
-    def render_forward_decl(self):
+    def render_header_forwards(self):
+        """Stuff that needs to be known by all other code in the .h file"""
+        return self._render_forward_def()
+
+    def render_header_impl(self):
+        """Stuff that implements stuff in the .h file"""
+        return self._render_class_struct()
+
+    def render_forwards(self):
+        """Stuff that needs to be known by all other code in .cpp file"""
+        return ""
+
+    def render_impl(self):
+        """Implementation that need final definition of all type structs, etc.."""
+        return ""
+
+    def render_python_api(self):
+        """The general python c-api constructs"""
+        return self._render_cpp_declaration()
+
+    def _render_forward_def(self):
         code = """
         /* %(name)s forward decl */
         struct %(struct_name)s;
-        static %(struct_name)s* %(new_func)s(struct _typeobject *, PyObject *, PyObject *);
-        static void %(dealloc_func)s(PyObject* self);
-        static %(struct_name)s* %(copy_func)s(%(struct_name)s* self);
-        static bool %(is_instance_func)s(PyObject* arg);
+        %(struct_name)s* %(new_func)s();
+        void %(dealloc_func)s(PyObject* self);
+        %(struct_name)s* %(copy_func)s(%(struct_name)s* self);
+        bool %(is_instance_func)s(PyObject* arg);
         """
         code %= {
             "name": self.name,
@@ -91,108 +110,109 @@ class Class(CodeObject):
             "is_instance_func": self.class_is_instance_func_name,
         }
         for i in self.all_objects:
-            code += "\n" + i.render_forward_decl()
+            code += "\n" + i.render_forwards()
         return self.format_code(code)
 
-    def render_impl_decl(self):
-        return ""
-        #code = ""
-        #for i in self.all_objects:
-        #    code += "\n" + i.render_impl_decl()
-        #return self.format_code(code)
-
-    def render_cpp_declaration(self):
+    def _render_cpp_declaration(self):
         """Renders the complete cpp code to define the class and it's functions"""
         code = ""
         code += self.indent() + 'extern "C" {'
         self.push_indent()
-        code += "\n" + self.render_class_struct()
+        code += "\n" + self._render_doc_string()
+        code += "\n" + self._render_class_struct_impl()
         if self.functions:
             code += "\n\n/* ---------- %s methods ----------- */\n\n" % self.name
             for i in self.functions:
-                code += i.render_cpp_declaration(struct_name=self.class_struct_name)
+                code += i.render_python_api()
         if self.properties:
             code += "\n\n/* ---------- %s properties ----------- */\n\n" % self.name
             for i in self.properties:
-                code += i.render_cpp_declaration()
+                code += i.render_python_api()
         code += "\n\n/* ---------- %s structs ----------- */\n\n" % self.name
-        code += "\n" + self.render_method_struct()
+        code += "\n" + self._render_method_struct()
         if self.properties:
-            code += "\n" + self.render_getset_struct()
+            code += "\n" + self._render_getset_struct()
         if self.has_sequence_function():
-            code += "\n" + self.render_sequence_struct()
+            code += "\n" + self._render_sequence_struct()
         if self.has_number_function():
-            code += "\n" + self.render_number_struct()
-        code += "\n" + self.render_type_struct()
+            code += "\n" + self._render_number_struct()
+        code += "\n" + self._render_type_struct()
         code += "\n\n/* ---------- %s ctor/dtor ----------- */\n\n" % self.name
-        code += "\n" + self.render_ctor_impl()
+        code += "\n" + self._render_ctor_impl()
         self.pop_indent()
         code += self.indent() + '\n} // extern "C"\n'
-        code += self.indent() + "\n" + self.render_init_func()
+        code += self.indent() + "\n" + self._render_init_func()
         for i in self.all_objects:
-            c = i.render_impl_decl()
+            c = i.render_impl()
             if c:
                 code += "\n" + c
 
         return code
 
-    def render_class_struct(self):
+    def _render_class_struct(self):
         code = """
         /* class '%(name)s' */
         struct %(struct_name)s
         {
             PyObject_HEAD
 %(decl)s
-            void cppy_new()
-            {
-%(decl_new)s
-            }
-            void cppy_free()
-            {
-%(decl_free)s
-            }
-            void cppy_copy(%(struct_name)s* copy)
-            {
-                CPPY_UNUSED(copy);
-%(decl_copy)s
-            }
+            void cppy_new();
+            void cppy_free();
+            void cppy_copy(%(struct_name)s* copy);
         };
-        static const char* %(struct_name)s_doc_string = "%(doc)s";
 """ % {
             "name": self.name,
             "struct_name": self.class_struct_name,
-            "doc": to_c_string(self.doc),
             "decl": change_text_indent(self.cpp(), 12),
-            "decl_new": change_text_indent(self.cpp("NEW"), 16),
-            "decl_free": change_text_indent(self.cpp("FREE"), 16),
-            "decl_copy": change_text_indent(self.cpp("COPY"), 16),
         }
         return self.format_code(code)
 
-    def render_method_struct(self):
+    def _render_class_struct_impl(self):
+        code = """
+        /* class '%(name)s' member impl */
+        void %(struct_name)s::cppy_new()
+        {
+%(decl_new)s
+        }
+        void %(struct_name)s::cppy_free()
+        {
+%(decl_free)s
+        }
+        void %(struct_name)s::cppy_copy(%(struct_name)s* copy)
+        {
+            CPPY_UNUSED(copy);
+%(decl_copy)s
+        }
+""" % {
+            "name": self.name,
+            "struct_name": self.class_struct_name,
+            "decl_new": change_text_indent(self.cpp("NEW"), 12),
+            "decl_free": change_text_indent(self.cpp("FREE"), 12),
+            "decl_copy": change_text_indent(self.cpp("COPY"), 12),
+        }
+        return self.format_code(code)
+
+    def _render_method_struct(self):
         code = "static PyMethodDef %s[] =\n{\n" % self.method_struct_name
         for i in self.functions:
             if i.is_normal_function():
-                code += "    " + i.render_cpp_member_struct_entry()
+                code += "    " + i.render_member_struct_entry()
         code += "\n    { NULL, NULL, 0, NULL }\n};\n"
         return self.format_code(code)
 
-    def render_getset_struct(self):
+    def _render_getset_struct(self):
         code = "static PyGetSetDef %s[] =\n{\n" % self.getset_struct_name
         for i in self.properties:
             code += "    " + i.render_cpp_getset_struct_entry()
         code += "\n    { NULL, NULL, NULL, NULL, NULL }\n};\n"
         return self.format_code(code)
 
-    def scoped_name(self):
-        return "%s.%s" % (self.the_class.__name__, self.name)
-
-    def render_type_struct(self):
+    def _render_type_struct(self):
         dic = {}
         for i in PyTypeObject:
             dic[i[0]] = "NULL"
         dic.update({
-            "tp_name": '"%s"' % self.scoped_name(),
+            "tp_name": '"%s.%s"' % (self.context.name, self.name),
             "tp_basicsize": "sizeof(%s)" % self.class_struct_name,
             "tp_dealloc": self.class_dealloc_func_name,
             "tp_getattro": "PyObject_GenericGetAttr",
@@ -217,10 +237,10 @@ class Class(CodeObject):
                              self.type_struct_name, dic,
                              first_line="PyVarObject_HEAD_INIT(NULL, 0)") )
 
-    def render_mapping_struct(self):
+    def _render_mapping_struct(self):
         pass
 
-    def render_sequence_struct(self):
+    def _render_sequence_struct(self):
         dic = dict()
         for i in SEQUENCE_FUNCS:
             if self.has_function(i[0]):
@@ -230,7 +250,7 @@ class Class(CodeObject):
         return self.format_code(render_struct("PySequenceMethods", PySequenceMethods,
                              self.sequence_struct_name, dic))
 
-    def render_number_struct(self):
+    def _render_number_struct(self):
         dic = {}
         for i in NUMBER_FUNCS:
             if self.has_function(i[0]):
@@ -239,14 +259,19 @@ class Class(CodeObject):
         return self.format_code(render_struct("PyNumberMethods", PyNumberMethods,
                              self.number_struct_name, dic))
 
-    def render_ctor_impl(self):
+    def _render_doc_string(self):
+        return self.format_code(
+            "static const char* %s_doc_string = \"%s\";" % (self.class_struct_name, to_c_string(self.doc))
+        )
+
+    def _render_ctor_impl(self):
         code = """
         /* ###### class %(name)s ###### */
 
         /** Creates new instance of %(name)s class.
             @note Original function signature requires to return PyObject*,
             but here we return the actual %(name)s struct for convenience. */
-        %(struct_name)s* %(new_func)s(struct _typeobject *, PyObject* , PyObject* )
+        %(struct_name)s* %(new_func)s()
         {
             auto o = PyObject_New(%(struct_name)s, &%(type_struct)s);
             // Needs to be implemented by user in class %(name)s's cpp annotation
@@ -289,7 +314,7 @@ class Class(CodeObject):
         }
         return self.format_code(code)
 
-    def render_init_func(self):
+    def _render_init_func(self):
         code = """
         bool initialize_class_%(name)s(void* vmodule)
         {

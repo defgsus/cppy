@@ -124,8 +124,24 @@ class Function(CodeObject):
         return ("PyNoArgsFunction", "METH_NOARGS", "")
 
 
-    def render_cpp_declaration(self, struct_name=None):
-        """Returns the whole cpp function declaration"""
+    def render_header_forwards(self):
+        """Stuff that needs to be known by all other code in the .h file"""
+        return ""
+
+    def render_header_impl(self):
+        """Stuff that implements stuff in the .h file"""
+        return ""
+
+    def render_forwards(self):
+        """Stuff that needs to be known by all other code in .cpp file"""
+        return ""
+
+    def render_impl(self):
+        """Implementation that need final definition of all type structs, etc.."""
+        return ""
+
+    def render_python_api(self):
+        """The general python c-api constructs"""
         doc = ""
         if self.doc and self.is_normal_function():
             doc = 'static const char* %s_doc = "%s";\n' % (self.func_name, to_c_string(self.doc))
@@ -139,8 +155,7 @@ class Function(CodeObject):
 
         return self.format_code(code)
 
-
-    def render_cpp_member_struct_entry(self):
+    def render_member_struct_entry(self):
         args = self.get_args_data()
         s = '{ "%(name)s", reinterpret_cast<PyCFunction>(%(funcname)s), %(args)s, %(doc_name)s },\n' % {
             "name": self.name,

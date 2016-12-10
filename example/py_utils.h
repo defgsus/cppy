@@ -29,15 +29,7 @@
 #   define Py_RETURN_SELF return Py_INCREF(self), reinterpret_cast<PyObject*>(self)
 #endif
 
-class SStream
-{
-    std::stringstream sstream_;
-public:
-    operator std::string() { return sstream_.str(); }
-    template <class T>
-    SStream& operator << (const T& t) { sstream_ << t; return *this; }
-};
-
+namespace PyUtils {
 
 PyObject* toPython(const std::string&);
 PyObject* toPython(long);
@@ -73,11 +65,28 @@ std::string typeName(const PyObject* arg);
     and false is returned. */
 bool iterateSequence(PyObject* seq, std::function<bool(PyObject*item)> foo);
 
-/** Verify that index < len, raise PyError otherwise */
+/** Verify that index < len, raise IndexError otherwise */
 bool checkIndex(Py_ssize_t index, Py_ssize_t len);
-
 
 /** print object internals */
 void dumpObject(PyObject* arg, bool introspect);
 
+/** A std::stringstream wrapper that converts to
+    std::string or PyObject* automatically */
+class SStream
+{
+    std::stringstream sstream_;
+public:
+    template <class T>
+    SStream& operator << (const T& t) { sstream_ << t; return *this; }
+
+    operator std::string() { return sstream_.str(); }
+    operator PyObject*() { return toPython(sstream_.str()); }
+};
+
+
+} // namespace PyUtils
+
+
 #endif // PY_UTILS_H
+
