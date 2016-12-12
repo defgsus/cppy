@@ -42,8 +42,8 @@ class Abel:
     An example to create an embedded class object
 
     _CPP_:
-        // These are c++ members of the class
-        // (Since we are in 'c namespace' they are not constructed by default!)
+        // These are the C members of the class
+        // (Since we are in 'C namespace' they are not constructed by default!)
         std::string* data;
 
     _CPP_(NEW):
@@ -70,9 +70,17 @@ class Abel:
             // __init__ functions are always called as METH_VARARGS function
             // so 'arg1' is always a tuple and 'arg2' is a dict with keywords
             arg1 = removeArgumentTuple(arg1);
+            // if we got a string, that's fine
             if (fromPython(arg1, self->data))
                 return 0;
-            return 0;
+            // An empty argument is also acceptable
+            if (PyTuple_Check(arg1) && PyTuple_Size(arg1) == 0)
+                return 0;
+            // otherwise raise an error
+            setPythonError(PyExc_TypeError, SStream() << "Invalid argument " << typeName(arg1)
+                                            << " to $NAME() constructor");
+            // The __init__ function is also special in it's return-type!
+            return -1;
         """
         pass
 
@@ -204,9 +212,10 @@ class Kain(Abel):
         """
         Slays Abel
         _CPP_:
-            CPPY_PRINT("Kain(" << *self->data << ") slew Abel("
-                       << (self->abel ? *self->abel->data : std::string()) << ")" );
-            Py_RETURN_NONE;
+            std::string s = SStream() << "Kain(" << *self->data << ") slew Abel("
+                       << (self->abel ? *self->abel->data : std::string()) << ")";
+            CPPY_PRINT(s);
+            return toPython(s);
         """
         pass
 

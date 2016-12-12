@@ -18,6 +18,12 @@ class ExportContext(DocObject):
         self.struct_name = "cppy_module_%s" % self.name
         self.method_struct_name = "cppy_module_methods_%s" % self.name
 
+    def __str__(self):
+        return "Context(%s)" % self.name
+
+    def supported_doc_tags(self):
+        return [None, "HEADER"]
+
     def format_code(self, code):
         return self.format_cpp(code, None)
 

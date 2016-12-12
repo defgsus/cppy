@@ -6,6 +6,7 @@ from .renderer import *
 class Function(CodeObject):
     """A python c-api implementation of a global or member function"""
     def __init__(self, func, for_class):
+        self.for_class = for_class
         super().__init__(
             name=func.__name__,
             doc=inspect.getdoc(func),
@@ -13,13 +14,14 @@ class Function(CodeObject):
         )
         self.func = func
         self.args = inspect.getargspec(self.func)
-        self.for_class = for_class
         if self.for_class:
             self.func_name = "cppy_classmethod_%s_%s" % (self.for_class.name, self.name)
         else:
             self.func_name = "cppy_%s" % self.name
         # self.doc += "\n" + str(self.args)
 
+    def supported_doc_tags(self):
+        return [None]
 
     def __str__(self):
         if self.for_class:

@@ -39,7 +39,7 @@ FUNCTIONS = {
     "setter":               ("int",         ("PyObject*", "PyObject*", "void*")),
     "objobjproc":           ("int",         ("PyObject*", "PyObject*")),
     "visitproc":            ("int",         ("PyObject*", "void*")),
-    "traverseproc":         ("PyObject*",   ("visitproc", "void*")),
+    "traverseproc":         ("int",         ("PyObject*", "visitproc", "void*")),
 }
 
 

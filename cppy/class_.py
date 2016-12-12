@@ -29,6 +29,9 @@ class Class(CodeObject):
     def all_objects(self):
         return self.functions + self.properties
 
+    def supported_doc_tags(self):
+        return [None, "DEF", "IMPL", "NEW", "COPY", "FREE"]
+
     def has_cpp(self, key=None):
         for i in self.bases:
             if i.has_cpp(key):
@@ -173,8 +176,7 @@ class Class(CodeObject):
     def _render_class_struct_impl(self):
         code = """
 
-        /* -- class '%(name)s' member impl -- */
-
+        /* -- '%(name)s' struct member impl -- */
         void %(struct_name)s::cppy_new()
         {
             %(decl_new)s

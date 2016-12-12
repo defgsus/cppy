@@ -24,7 +24,8 @@ class TestRenderer(unittest.TestCase):
         self.assertEqual("  value", apply_string_dict("  %(val)s", dic))
         self.assertEqual("blub-value-bla", apply_string_dict("blub-%(val)s-bla", dic))
         self.assertEqual("blub-value.other-bla", apply_string_dict("blub-%(val)s.%(val2)s-bla", dic))
-
+        self.assertEqual("void value::cppy_copy(value* copy)",
+                         apply_string_dict("void %(val)s::cppy_copy(%(val)s* copy)", dic))
         self.assertEqual("func() {\n    value;\n}",
                          apply_string_dict("func() {\n    %(val)s;\n}", dic) )
 

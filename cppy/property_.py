@@ -35,6 +35,9 @@ class Property(CodeObject):
     def __str__(self):
         return "Property(%s.%s)" % (self.for_class.name, self.name)
 
+    def supported_doc_tags(self):
+        return [None]
+
     def render_header_forwards(self):
         """Stuff that needs to be known by all other code in the .h file"""
         return ""

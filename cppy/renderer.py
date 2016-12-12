@@ -103,8 +103,7 @@ def apply_string_dict(code_, dic):
     code = str(code_)
     for key in dic:
         skey = "%(" + key + ")s"
-        start = 0
-        pos = code.find(skey, start)
+        pos = code.find(skey)
         while pos >= 0:
             linestart = code.rfind("\n", 0, pos)
             if linestart < 0:
@@ -120,8 +119,7 @@ def apply_string_dict(code_, dic):
             #print(linestart, pos, indent)
             text = change_text_indent(dic[key], indent)
             code = code[:linestart] + text + code[pos + len(skey):]
-            start = pos + len(skey) + len(text)
-            pos = code.find(skey, start)
+            pos = code.find(skey)
     return code
 
 
@@ -417,14 +415,14 @@ class Renderer:
     def _render_hpp_forwards(self):
         code = ""
         for i in self.context.all_objects:
-            code += "\n" + i.render_header_forwards()
-        return self.context.format_cpp(code, None)
+            code += "\n\n" + i.render_header_forwards()
+        return self.context.format_cpp(code, None) + "\n"
 
     def _render_hpp_impl(self):
         code = ""
         for i in self.context.all_objects:
-            code += "\n" + i.render_header_impl()
-        return self.context.format_cpp(code, None)
+            code += "\n\n" + i.render_header_impl()
+        return self.context.format_cpp(code, None) + "\n"
 
     def _render_cpp_forwards(self):
         code = ""
