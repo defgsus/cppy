@@ -32,9 +32,45 @@
 namespace PyUtils {
 
 PyObject* toPython(const std::string&);
-PyObject* toPython(long);
+PyObject* toPython(const char*);
 PyObject* toPython(double);
 PyObject* toPython(bool);
+PyObject* toPython(long);
+PyObject* toPython(long unsigned);
+PyObject* toPython(int);
+
+template <class T0>
+PyObject* toTuple(const T0& v0);
+template <class T0, class T1>
+PyObject* toTuple(const T0& v0, const T1& v1);
+template <class T0, class T1, class T2>
+PyObject* toTuple(const T0& v0, const T1& v1, const T2& v2);
+template <class T0, class T1, class T2, class T3>
+PyObject* toTuple(const T0& v0, const T1& v1, const T2& v2, const T3& v3);
+template <class T0, class T1, class T2, class T3, class T4>
+PyObject* toTuple(const T0& v0, const T1& v1, const T2& v2, const T3& v3, const T4& v4);
+
+template <class T>
+PyObject* toTuple(const T* vec, size_t num);
+template <class T>
+PyObject* toTuple(T* vec, size_t num) { return toTuple((const T*)vec, num); }
+
+template <class T0>
+PyObject* toList(const T0& v0);
+template <class T0, class T1>
+PyObject* toList(const T0& v0, const T1& v1);
+template <class T0, class T1, class T2>
+PyObject* toList(const T0& v0, const T1& v1, const T2& v2);
+template <class T0, class T1, class T2, class T3>
+PyObject* toList(const T0& v0, const T1& v1, const T2& v2, const T3& v3);
+template <class T0, class T1, class T2, class T3, class T4>
+PyObject* toList(const T0& v0, const T1& v1, const T2& v2, const T3& v3, const T4& v4);
+
+template <class T>
+PyObject* toList(const T* vec, size_t num);
+template <class T>
+PyObject* toList(T* vec, size_t num) { return toList((const T*)vec, num); }
+
 
 bool fromPython(PyObject*, std::string*);
 bool fromPython(PyObject*, long*);
@@ -83,6 +119,132 @@ public:
     operator std::string() { return sstream_.str(); }
     operator PyObject*() { return toPython(sstream_.str()); }
 };
+
+
+
+// #################### template impl. #####################
+
+template <class T>
+PyObject* toTuple(const T& v0)
+{
+    auto o = PyTuple_New(1);
+    PyTuple_SetItem(o, 0, toPython(v0));
+    return o;
+}
+
+template <class T0, class T1>
+PyObject* toTuple(const T0& v0, const T1& v1)
+{
+    auto o = PyTuple_New(2);
+    PyTuple_SetItem(o, 0, toPython(v0));
+    PyTuple_SetItem(o, 1, toPython(v1));
+    return o;
+}
+
+template <class T0, class T1, class T2>
+PyObject* toTuple(const T0& v0, const T1& v1, const T2& v2)
+{
+    auto o = PyTuple_New(3);
+    PyTuple_SetItem(o, 0, toPython(v0));
+    PyTuple_SetItem(o, 1, toPython(v1));
+    PyTuple_SetItem(o, 2, toPython(v2));
+    return o;
+}
+
+template <class T0, class T1, class T2, class T3>
+PyObject* toTuple(const T0& v0, const T1& v1, const T2& v2, const T3& v3)
+{
+    auto o = PyTuple_New(4);
+    PyTuple_SetItem(o, 0, toPython(v0));
+    PyTuple_SetItem(o, 1, toPython(v1));
+    PyTuple_SetItem(o, 2, toPython(v2));
+    PyTuple_SetItem(o, 3, toPython(v3));
+    return o;
+}
+
+template <class T0, class T1, class T2, class T3, class T4>
+PyObject* toTuple(const T0& v0, const T1& v1, const T2& v2, const T3& v3, const T4& v4)
+{
+    auto o = PyTuple_New(5);
+    PyTuple_SetItem(o, 0, toPython(v0));
+    PyTuple_SetItem(o, 1, toPython(v1));
+    PyTuple_SetItem(o, 2, toPython(v2));
+    PyTuple_SetItem(o, 3, toPython(v3));
+    PyTuple_SetItem(o, 4, toPython(v4));
+    return o;
+}
+
+
+
+template <class T>
+PyObject* toList(const T& v0)
+{
+    auto o = PyList_New(1);
+    PyList_SetItem(o, 0, toPython(v0));
+    return o;
+}
+
+template <class T0, class T1>
+PyObject* toList(const T0& v0, const T1& v1)
+{
+    auto o = PyList_New(2);
+    PyList_SetItem(o, 0, toPython(v0));
+    PyList_SetItem(o, 1, toPython(v1));
+    return o;
+}
+
+template <class T0, class T1, class T2>
+PyObject* toList(const T0& v0, const T1& v1, const T2& v2)
+{
+    auto o = PyList_New(3);
+    PyList_SetItem(o, 0, toPython(v0));
+    PyList_SetItem(o, 1, toPython(v1));
+    PyList_SetItem(o, 2, toPython(v2));
+    return o;
+}
+
+template <class T0, class T1, class T2, class T3>
+PyObject* toList(const T0& v0, const T1& v1, const T2& v2, const T3& v3)
+{
+    auto o = PyList_New(4);
+    PyList_SetItem(o, 0, toPython(v0));
+    PyList_SetItem(o, 1, toPython(v1));
+    PyList_SetItem(o, 2, toPython(v2));
+    PyList_SetItem(o, 3, toPython(v3));
+    return o;
+}
+
+template <class T0, class T1, class T2, class T3, class T4>
+PyObject* toList(const T0& v0, const T1& v1, const T2& v2, const T3& v3, const T4& v4)
+{
+    auto o = PyList_New(5);
+    PyList_SetItem(o, 0, toPython(v0));
+    PyList_SetItem(o, 1, toPython(v1));
+    PyList_SetItem(o, 2, toPython(v2));
+    PyList_SetItem(o, 3, toPython(v3));
+    PyList_SetItem(o, 4, toPython(v4));
+    return o;
+}
+
+template <class T>
+PyObject* toTuple(const T* vec, size_t num)
+{
+    auto o = PyTuple_New(num);
+    for (size_t i = 0; i < num; ++i)
+        PyTuple_SetItem(o, i, toPython(*vec++));
+    return o;
+}
+
+template <class T>
+PyObject* toList(const T* vec, size_t num)
+{
+    auto o = PyList_New(num);
+    for (size_t i = 0; i < num; ++i)
+        PyList_SetItem(o, i, toPython(*vec++));
+    return o;
+}
+
+
 
 
 } // namespace PyUtils

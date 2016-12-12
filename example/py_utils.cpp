@@ -8,6 +8,11 @@ PyObject* toPython(const std::string& s)
     return PyUnicode_FromString(s.data());
 }
 
+PyObject* toPython(const char* s)
+{
+    return PyUnicode_FromString(s);
+}
+
 PyObject* toPython(long x)
 {
     return PyLong_FromLong(x);
@@ -25,6 +30,10 @@ PyObject* toPython(bool b)
     else
         Py_RETURN_FALSE;
 }
+
+PyObject* toPython(long unsigned x) { return toPython((long)x); }
+PyObject* toPython(int x) { return toPython((long)x); }
+
 
 bool fromPython(PyObject* obj, std::string* s)
 {

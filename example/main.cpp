@@ -22,6 +22,7 @@ int main(int argc, char** argv)
 
     // run python
     Py_Main(argc, wargs);
+    //Py_Initialize(); PyRun_SimpleString("from example import Kain\nprint(Kain().wisdom)");
 
     return 0;
 }
