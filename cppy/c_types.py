@@ -1,3 +1,6 @@
+"""
+Collection of lists and dicts representing types in the python C-API
+"""
 
 """
 CPython's function pointers as dict:
@@ -34,6 +37,9 @@ FUNCTIONS = {
 
     "getter":               ("PyObject*",   ("PyObject*", "void*")),
     "setter":               ("int",         ("PyObject*", "PyObject*", "void*")),
+    "objobjproc":           ("int",         ("PyObject*", "PyObject*")),
+    "visitproc":            ("int",         ("PyObject*", "void*")),
+    "traverseproc":         ("PyObject*",   ("visitproc", "void*")),
 }
 
 

@@ -1,8 +1,17 @@
+"""
+Collection of formatting helper functions
+and the final Renderer to generate the output
+"""
 from .c_types import *
 
 INDENT = "    "
 
 def to_c_string(text):
+    """
+    Make 'text' agreeable as C/C++ string literal
+    :return: str
+    """
+    text = text.replace("\\", "\\\\")
     text = text.replace("\n", "\\n")
     text = text.replace("\r", "")
     text = text.replace('"', '\\"')
@@ -12,6 +21,12 @@ def is_whitespace(c):
     return c == ' ' or c == '\n' or c == '\t'
 
 def strip_newlines(code):
+    """
+    Removes \n from beginning and end of string.
+    All Whitespace is removed as well, except for whitespace directly
+    preceding the text
+    :return: str
+    """
     start = 0
     for i, c in enumerate(code):
         if c == '\n':
@@ -23,11 +38,18 @@ def strip_newlines(code):
         i -= 1
     return code[start:i+1]
 
-def indent_code(code, indent):
-    import re
-    return indent + re.sub(r"\n[ |\t]*", "\n"+indent, code.strip())
+#def indent_code(code, indent):
+#    import re
+#    return indent + re.sub(r"\n[ |\t]*", "\n"+indent, code.strip())
 
 def change_text_indent(code, len):
+    """
+    Changes the indentation of a block of text.
+    All leading whitespace on each line is stripped up to the
+    maximum common length of ws for each line and then 'len' spaces are inserted.
+    Also concats multiple new-lines into one
+    :return: str
+    """
     lines = code.replace("\t", INDENT).split("\n")
     min_space = -1
     for line in lines:
@@ -40,11 +62,69 @@ def change_text_indent(code, len):
                 break
     pre = " " * len
     code = ""
+    was_nl = False
     for line in lines:
         li = line[min_space:]
         if li:
             code += pre + li + "\n"
+            was_nl = False
+        else:
+            if not was_nl:
+                code += "\n"
+            was_nl = True
+    if code.endswith("\n"):
+        code = code[:-1]
     return code
+
+
+def apply_string_dict(code_, dic):
+    """
+    Replaces %(key)s tags in the given code_ with values from the dictionary dic.
+    The indentation of code_ and multi-line dic values will be preserved,
+    e.g., given a dic value for "bar":
+
+    for i in bar:
+        baz
+
+    then
+
+    foo:
+        %(bar)s
+
+    will be converted to:
+
+    foo:
+        for i in bar:
+            baz
+
+    The original indentation of dic values will be stripped using change_text_indent()
+    :return: str
+    """
+    code = str(code_)
+    for key in dic:
+        skey = "%(" + key + ")s"
+        start = 0
+        pos = code.find(skey, start)
+        while pos >= 0:
+            linestart = code.rfind("\n", 0, pos)
+            if linestart < 0:
+                linestart = pos
+                indent = 0
+            else:
+                linestart += 1
+                for i in range(linestart, pos):
+                    if not is_whitespace(code[i]):
+                        linestart = pos
+                        break
+                indent = pos - linestart
+            #print(linestart, pos, indent)
+            text = change_text_indent(dic[key], indent)
+            code = code[:linestart] + text + code[pos + len(skey):]
+            start = pos + len(skey) + len(text)
+            pos = code.find(skey, start)
+    return code
+
+
 
 def split_doc_cpp(text):
     """
@@ -78,6 +158,12 @@ def split_doc_cpp(text):
 
 
 def render_func_def(name, type):
+    """
+    Render a function definition will all function arguments
+    :param name: str, name of the function
+    :param type: str, name of the function type, e.g. "unaryfunc", see c_types.py
+    :return: str
+    """
     if not type in FUNCTIONS:
         raise ValueError("Function type for %s not in c_types.FUNCTIONS" % type)
     args = FUNCTIONS[type]
@@ -89,6 +175,15 @@ def render_func_def(name, type):
     return code + ")"
 
 def render_function(name, type, cpp, for_class=None):
+    """
+    Render a function declaration
+    :param name: str, name of the function
+    :param type: str, name of the function type, e.g. "unaryfunc", see c_types.py
+    :param cpp: str, the function body
+    :param for_class: Class, if provided, a cast from 'arg0' to 'self' for the given
+            class will be rendered before the user code
+    :return: str
+    """
     if not type in FUNCTIONS:
         raise ValueError("Function type for %s not in c_types.FUNCTIONS" % type)
     get_self = ""
@@ -110,10 +205,15 @@ def render_function(name, type, cpp, for_class=None):
     return code
 
 
-def render_struct(structtypename, struct_table, name, dictionary, indent="", first_line=""):
+def render_struct(structtypename, struct_table, name, dictionary, first_line=""):
     """
     Renders a struct with the contents from 'dictionary'
-    struct_table is something like c_types.PyNumberMethods
+    :param structtypename: str, name of the struct type, e.g. "PyNumberMethods"
+    :param struct_table: list, something like, e.g. c_types.PyNumberMethods
+    :param name: str, name of the struct variable
+    :param dictionary: dict, key-value for the struct members, e.g. { "nb_add": "my_add_method" }
+    :param first_line: optional first line in struct entry, e.g. "PyVarObject_HEAD_INIT(NULL, 0)"
+    :return: str
     """
     name_width = 1
     type_width = 1
@@ -121,18 +221,18 @@ def render_struct(structtypename, struct_table, name, dictionary, indent="", fir
         name_width = max(name_width, len(i[0]))
         type_width = max(type_width, len(i[1]))
 
-    code = "%(indent)sstatic %(type)s %(name)s =\n%(indent)s{\n" % {
-        "indent": indent, "type": structtypename, "name": name
+    code = "static %(type)s %(name)s =\n{\n" % {
+        "type": structtypename, "name": name
     }
     if first_line:
-        code += indent + INDENT + first_line + "\n"
+        code += INDENT + first_line + "\n"
     for i in struct_table:
         cast = "static"
-        # return type of 'new' function is the class struct, not PyObject
+        # return type of cppy's 'new' function is the class struct, not PyObject
         if i[0] == "tp_new":
             cast = "reinterpret"
         code += "%(indent)s%(name)s %(type)s(%(value)s)" % {
-            "indent": indent+INDENT,
+            "indent": INDENT,
             "name" : ("/* %s */" % i[0]).ljust(name_width + 6),
             "type" : ("%s_cast<%s>" % (cast, i[1])).ljust(type_width + 13),
             "value" : str(dictionary.get(i[0], "NULL"))
@@ -140,9 +240,8 @@ def render_struct(structtypename, struct_table, name, dictionary, indent="", fir
         if not i == struct_table[-1]:
             code += ","
         code += "\n"
-    code += indent + "}; /* %s */\n" % name
+    code += "}; /* %s */\n" % name
     return code
-
 
 
 
@@ -176,56 +275,59 @@ class Renderer:
             file.write(code)
 
     def render_hpp(self):
-        self.context.clear_indent()
         code = """
-/* generated by cppy on %(date)s */
+        /* generated by cppy on %(date)s */
 
-#include <python3.4/Python.h>
-%(header)s
+        #include <python3.4/Python.h>
+        %(header)s
 
-%(user)s
+        %(user)s
 
-%(namespace_open)s
+        %(namespace_open)s
 
-%(init_types)s
+        %(init_types)s
 
-/* Call this before Py_Initialize() */
-bool initialize_module_%(name)s();
+        /* Call this before Py_Initialize() */
+        bool initialize_module_%(name)s();
 
-extern "C" {
-%(forwards)s
-%(impl)s
-} // extern "C"
+        extern "C" {
+            %(forwards)s
+            %(impl)s
+        } // extern "C"
 
-%(namespace_close)s
-%(footer)s
-"""
+        %(namespace_close)s
+
+        %(footer)s
+        """
+        code = change_text_indent(code, 0)
+
         init_types = ""
         #for i in self.classes:
-        #    init_types += "    bool initialize_class_%s(void* pyObject_module);\n" % i.name
+        #    init_types += "bool initialize_class_%s(void* pyObject_module);\n" % i.name
 
         import datetime
-        code %= { "name": self.context.name,
-                  "header": self.h_header,
-                  "footer": self.h_footer,
-                  "user": self.context.cpp("HEADER"),
-                  "date": datetime.datetime.now(),
-                  "init_types": init_types,
-                  "forwards": self._render_hpp_forwards(),
-                  "impl": self._render_hpp_impl(),
-                  "namespace_open": self._render_namespace_open(),
-                  "namespace_close": self._render_namespace_close(),
-                  }
+        code = apply_string_dict(code, {
+            "name": self.context.name,
+            "header": self.h_header,
+            "footer": self.h_footer,
+            "user": self.context.cpp("HEADER"),
+            "date": str(datetime.datetime.now()),
+            "init_types": init_types,
+            "forwards": self._render_hpp_forwards(),
+            "impl": self._render_hpp_impl(),
+            "namespace_open": self._render_namespace_open(),
+            "namespace_close": self._render_namespace_close(),
+        })
         return self.context.format_cpp(code, None)
 
 
     def render_cpp(self):
-        self.context.clear_indent()
         code = """
         /* generated by cppy on %(date)s */
 
         #include <python3.4/Python.h>
         #include <python3.4/structmember.h>
+
         #include "%(module_name)s.h"
 
         #ifndef CPPY_ERROR
@@ -244,7 +346,7 @@ extern "C" {
 
         /* forwards */
         extern "C" {
-        %(forwards)s
+            %(forwards)s
         } // extern "C"
 
         %(namespace_close)s
@@ -255,52 +357,46 @@ extern "C" {
         /* user declarations */
         %(decl)s
 
-        /* python c-api tango */
+        /* start the python c-api tango */
         %(namespace_open)s
         """
         code = change_text_indent(code, 0)
-        self.context.push_indent()
-        forwards = self._render_cpp_forwards()
-        self.context.pop_indent()
 
         import datetime
-        code %= {
-            "date": datetime.datetime.now(),
+        code = apply_string_dict(code, {
+            "date": str(datetime.datetime.now()),
             "module_name": self.context.name,
             "static_asserts" : self._render_static_asserts(),
             "header": self.context.format_cpp(self.cpp_header, None),
             "decl": self.context.format_cpp(self.context.cpp() or self.context.cpp("DEF"), None),
-            "forwards": forwards,
+            "forwards": self._render_cpp_forwards(),
             "namespace_open": self._render_namespace_open(),
             "namespace_close": self._render_namespace_close(),
-        }
+        })
 
         if self.classes:
             for i in self.classes:
-                code += "\n/* #################### class %s ##################### */\n\n" % i.name
+                code += "\n\n/* #################### class %s ##################### */\n\n" % i.name
                 code += i.render_python_api()
 
         if self.functions:
-            code += "\n/* #################### global functions ##################### */\n\n"
+            code += "\n\n/* #################### global functions ##################### */\n\n"
             code += 'extern "C" {\n'
-            self.context.push_indent()
             for i in self.functions:
-                code += i.render_python_api()
+                code += "\n" + i.render_python_api()
             code += "\n" + self._render_method_struct()
-            self.context.pop_indent()
             code += '} // extern "C"\n'
 
         if self.context.has_cpp("IMPL"):
             code += "\n" + self.context.format_cpp(self.context.cpp("IMPL")) + "\n"
 
-        code += '\nextern "C" {\n'
-        self.context.push_indent()
-        code += self._render_module_def()
-        self.context.pop_indent()
+        decl = self._render_module_def()
         c = self._render_impl_decl()
         if c:
-            code += "\n/* ##### c-api wrapper implementation ##### */\n" + c
-        code += '} // extern "C"\n'
+            decl += "\n/* ##### c-api wrapper implementation ##### */\n" + c
+        code += apply_string_dict('\nextern "C" {\n' + INDENT + '%(decl)s\n} // extern "C"\n',
+                                  { "decl": decl })
+
         code += "\n" + self._render_module_init()
         code += "\n" + self._render_namespace_close()
         code += "\n/* footer from configuration */\n" + self.cpp_footer
@@ -356,36 +452,38 @@ extern "C" {
 
     def _render_module_init(self):
         code = """
-namespace {
-    PyMODINIT_FUNC create_module_func()
-    {
-        auto module = PyModule_Create(&%(module_def)s);
-        if (!module)
-            return nullptr;
+        namespace {
+            PyMODINIT_FUNC create_module_%(name)s_func()
+            {
+                auto module = PyModule_Create(&%(module_def)s);
+                if (!module)
+                    return nullptr;
 
-%(init_calls)s
+                %(init_calls)s
 
-        return module;
-    }
-} // namespace
+                return module;
+            }
+        } // namespace
 
-bool initialize_module_%(name)s()
-{
-    PyImport_AppendInittab("%(name)s", create_module_func);
-    return true;
-}
-"""
+        bool initialize_module_%(name)s()
+        {
+            PyImport_AppendInittab("%(name)s", create_module_%(name)s_func);
+            return true;
+        }
+        """
+        code = change_text_indent(code, 0)
+
         init_calls = ""
         if self.classes:
-            init_calls += "        // add the classes\n"
-        for i in self.classes:
-            init_calls += "        initialize_class_%s(module);\n" % i.name
+            init_calls += "// add the classes\n"
+            for i in self.classes:
+                init_calls += "initialize_class_%s(module);\n" % i.name
 
-        code %= {
+        code = apply_string_dict(code, {
             "name": self.context.name,
             "module_def": self.context.struct_name,
             "init_calls": init_calls
-        }
+        })
 
         return self.context.format_cpp(code, None)
 

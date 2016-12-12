@@ -29,10 +29,6 @@ class CodeObject(DocObject):
     def __str__(self):
         return "%s" % self.name
 
-    def push_indent(self): self.context.push_indent()
-    def pop_indent(self): self.context.pop_indent()
-    def indent(self): return self.context.indent()
-    def indent_length(self): return self.context.indent_length()
     def format_code(self, code): return self.context.format_cpp(code, self)
 
     def render_header_forwards(self):

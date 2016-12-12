@@ -17,7 +17,6 @@ class ExportContext(DocObject):
         self.name = module.__name__
         self.struct_name = "cppy_module_%s" % self.name
         self.method_struct_name = "cppy_module_methods_%s" % self.name
-        self.indent_level = 0
 
     def format_code(self, code):
         return self.format_cpp(code, None)
@@ -83,23 +82,6 @@ class ExportContext(DocObject):
                 if not "builtins.object" in name and not name == "object":
                     i.bases.append(self.get_class(name))
 
-    def push_indent(self):
-        self.indent_level += 1
-
-    def pop_indent(self):
-        if self.indent_level <= 0:
-            raise RuntimeWarning("pop_indent() called without push")
-        self.indent_level -= 1
-
-    def clear_indent(self):
-        self.indent_level = 0
-
-    def indent(self):
-        return "    " * self.indent_level
-
-    def indent_length(self):
-        return self.indent_level * 4
-
     def format_cpp(self, code, for_object):
         """Applies template replacement"""
         code1 = ""
@@ -112,7 +94,7 @@ class ExportContext(DocObject):
             code1 += self.get_template_arg(i.groups()[0], i.groups()[1], for_object)
         code1 += code[prev:]
         code = strip_newlines(code1)
-        return change_text_indent(code, self.indent_length())
+        return change_text_indent(code, 0)
 
     def get_template_arg(self, tag, the_args, for_class):
         """Returns the value for a template tag '$tag(the_args)'"""

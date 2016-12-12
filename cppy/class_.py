@@ -116,14 +116,12 @@ class Class(CodeObject):
     def _render_cpp_declaration(self):
         """Renders the complete cpp code to define the class and it's functions"""
         code = ""
-        code += self.indent() + 'extern "C" {'
-        self.push_indent()
         code += "\n" + self._render_doc_string()
         code += "\n" + self._render_class_struct_impl()
         if self.functions:
             code += "\n\n/* ---------- %s methods ----------- */\n\n" % self.name
             for i in self.functions:
-                code += i.render_python_api()
+                code += "\n" + i.render_python_api()
         if self.properties:
             code += "\n\n/* ---------- %s properties ----------- */\n\n" % self.name
             for i in self.properties:
@@ -139,9 +137,11 @@ class Class(CodeObject):
         code += "\n" + self._render_type_struct()
         code += "\n\n/* ---------- %s ctor/dtor ----------- */\n\n" % self.name
         code += "\n" + self._render_ctor_impl()
-        self.pop_indent()
-        code += self.indent() + '\n} // extern "C"\n'
-        code += self.indent() + "\n" + self._render_init_func()
+
+        code = apply_string_dict('extern "C" {\n' + INDENT + '%(decl)s\n} // extern "C"\n',
+                                 { "decl": code })
+
+        code += "\n" + self._render_init_func()
         for i in self.all_objects:
             c = i.render_impl()
             if c:
@@ -155,56 +155,63 @@ class Class(CodeObject):
         struct %(struct_name)s
         {
             PyObject_HEAD
-%(decl)s
+            %(decl)s
             void cppy_new();
             void cppy_free();
             void cppy_copy(%(struct_name)s* copy);
         };
-""" % {
+        """
+        code = change_text_indent(code, 0)
+
+        code = apply_string_dict(code, {
             "name": self.name,
             "struct_name": self.class_struct_name,
-            "decl": change_text_indent(self.cpp(), 12),
-        }
+            "decl": self.cpp() or self.cpp("DEF"),
+        })
         return self.format_code(code)
 
     def _render_class_struct_impl(self):
         code = """
-        /* class '%(name)s' member impl */
+
+        /* -- class '%(name)s' member impl -- */
+
         void %(struct_name)s::cppy_new()
         {
-%(decl_new)s
+            %(decl_new)s
         }
         void %(struct_name)s::cppy_free()
         {
-%(decl_free)s
+            %(decl_free)s
         }
         void %(struct_name)s::cppy_copy(%(struct_name)s* copy)
         {
             CPPY_UNUSED(copy);
-%(decl_copy)s
+            %(decl_copy)s
         }
-""" % {
+"""
+        code = change_text_indent(code, 0)
+        code = apply_string_dict(code, {
             "name": self.name,
             "struct_name": self.class_struct_name,
             "decl_new": change_text_indent(self.cpp("NEW"), 12),
             "decl_free": change_text_indent(self.cpp("FREE"), 12),
             "decl_copy": change_text_indent(self.cpp("COPY"), 12),
-        }
+        })
         return self.format_code(code)
 
     def _render_method_struct(self):
         code = "static PyMethodDef %s[] =\n{\n" % self.method_struct_name
         for i in self.functions:
             if i.is_normal_function():
-                code += "    " + i.render_member_struct_entry()
-        code += "\n    { NULL, NULL, 0, NULL }\n};\n"
+                code += INDENT + i.render_member_struct_entry()
+        code += "\n" + INDENT + "{ NULL, NULL, 0, NULL }\n};\n"
         return self.format_code(code)
 
     def _render_getset_struct(self):
         code = "static PyGetSetDef %s[] =\n{\n" % self.getset_struct_name
         for i in self.properties:
-            code += "    " + i.render_cpp_getset_struct_entry()
-        code += "\n    { NULL, NULL, NULL, NULL, NULL }\n};\n"
+            code += INDENT + i.render_cpp_getset_struct_entry()
+        code += "\n" + INDENT + "{ NULL, NULL, NULL, NULL, NULL }\n};\n"
         return self.format_code(code)
 
     def _render_type_struct(self):
@@ -261,20 +268,17 @@ class Class(CodeObject):
 
     def _render_doc_string(self):
         return self.format_code(
-            "static const char* %s_doc_string = \"%s\";" % (self.class_struct_name, to_c_string(self.doc))
+            "static const char* %s_doc_string = \"%s\";\n" % (self.class_struct_name, to_c_string(self.doc))
         )
 
     def _render_ctor_impl(self):
         code = """
-        /* ###### class %(name)s ###### */
-
         /** Creates new instance of %(name)s class.
             @note Original function signature requires to return PyObject*,
             but here we return the actual %(name)s struct for convenience. */
         %(struct_name)s* %(new_func)s()
         {
             auto o = PyObject_New(%(struct_name)s, &%(type_struct)s);
-            // Needs to be implemented by user in class %(name)s's cpp annotation
             o->cppy_new();
             return o;
         }
@@ -282,7 +286,6 @@ class Class(CodeObject):
         /** Deletes a %(name)s instance */
         void %(dealloc_func)s(PyObject* self)
         {
-            // Needs to be implemented by user in class %(name)s's cpp annotation
             reinterpret_cast<%(struct_name)s*>(self)->cppy_free();
             self->ob_type->tp_free(self);
         }
@@ -292,7 +295,6 @@ class Class(CodeObject):
         %(struct_name)s* %(copy_func)s(%(struct_name)s* self)
         {
             %(struct_name)s* copy = $NEW(%(name)s);
-            // Needs to be implemented by user in class %(name)s's cpp annotation
             self->cppy_copy(copy);
             return copy;
         }
@@ -336,9 +338,7 @@ class Class(CodeObject):
             }
             return true;
         }
-        """
-        code %= {
-            "indent": self.indent(),
+        """ % {
             "name": self.name,
             "struct_name": self.type_struct_name
         }
