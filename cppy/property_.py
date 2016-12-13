@@ -7,13 +7,17 @@ class Property(CodeObject):
     """A python c-api wrapper of a class property"""
     def __init__(self, prop, for_class):
         name = ""
+        src_pos = ""
         try:
             name = prop.fget.__name__
+            src_pos = "%s:%d" % (prop.fget.__code__.co_filename, prop.fget.__code__.co_firstlineno)
             self.has_getter = True
         except:
             self.has_getter = False
         try:
-            name = prop.fget.__name__
+            name = prop.fset.__name__
+            if not src_pos:
+                src_pos = "%s:%d" % (prop.fset.__code__.co_filename, prop.fset.__code__.co_firstlineno)
             self.has_setter = True
         except:
             self.has_setter = False
@@ -21,7 +25,7 @@ class Property(CodeObject):
         super().__init__(
             name=name,
             doc=inspect.getdoc(prop),
-            #src_pos="%s:%d" % (func.__code__.co_filename, func.__code__.co_firstlineno),
+            src_pos=src_pos
         )
         self.prop = prop
         self.for_class = for_class
@@ -36,7 +40,7 @@ class Property(CodeObject):
         return "Property(%s.%s)" % (self.for_class.name, self.name)
 
     def supported_doc_tags(self):
-        return [None]
+        return [None, "GET", "SET"]
 
     def render_header_forwards(self):
         """Stuff that needs to be known by all other code in the .h file"""
@@ -57,9 +61,10 @@ class Property(CodeObject):
     def render_python_api(self):
         """The general python c-api constructs"""
         code = ""
+        if self.src_pos:
+            code += "/* %s */\n" % self.src_pos
         if self.doc:
             code += 'static const char* %s = "%s";\n' % (self.doc_name, to_c_string(self.doc))
-
         if self.has_getter:
             cpp = self.cpp() if self.has_cpp() else self.cpp("GET")
             code += render_function(self.getter_func_name, "getter", cpp, self.for_class)

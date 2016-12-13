@@ -24,6 +24,13 @@ class TestExample(unittest.TestCase):
         self._test_assignment(Abel)
         self._test_assignment(Kain)
 
+    def test_setter(self):
+        a = Abel()
+        a.justice = 11
+        self.assertEqual(11, a.justice)
+        with self.assertRaises(TypeError):
+            a.justice = "Wrong type"
+
     def test_str(self):
         self.assertEqual("Abel(\"\")", str(Abel()))
         self.assertEqual("Kain(\"\")", str(Kain()))

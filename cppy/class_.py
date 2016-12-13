@@ -14,16 +14,16 @@ class Class(CodeObject):
         self.functions = []
         self.properties = []
         self.class_struct_name = "%s_struct" % self.name
-        self.type_struct_name = "%s_type_static_mem" % self.name
+        self.type_struct_name = "%s_type_struct" % self.name
         self.method_struct_name = "%s_method_struct" % self.name
         self.number_struct_name = "%s_number_struct" % self.name
         self.mapping_struct_name = "%s_mapping_struct" % self.name
         self.sequence_struct_name = "%s_sequence_struct" % self.name
         self.getset_struct_name = "%s_getset_struct" % self.name
-        self.class_new_func_name = "cppy_new_%s" % self.class_struct_name
-        self.class_copy_func_name = "cppy_copy_%s" % self.class_struct_name
-        self.class_dealloc_func_name = "cppy_dealloc_%s" % self.class_struct_name
-        self.class_is_instance_func_name = "cppy_is_instance_%s" % self.class_struct_name
+        self.class_new_func_name = "create_%s" % self.name
+        self.class_copy_func_name = "copy_%s" % self.name
+        self.class_dealloc_func_name = "destroy_%s" % self.name
+        self.class_is_instance_func_name = "is_%s" % self.name
 
     @property
     def all_objects(self):
@@ -128,7 +128,7 @@ class Class(CodeObject):
         if self.properties:
             code += "\n\n/* ---------- %s properties ----------- */\n\n" % self.name
             for i in self.properties:
-                code += i.render_python_api()
+                code += "\n" + i.render_python_api()
         code += "\n\n/* ---------- %s structs ----------- */\n\n" % self.name
         code += "\n" + self._render_method_struct()
         if self.properties:
@@ -159,6 +159,7 @@ class Class(CodeObject):
         {
             PyObject_HEAD
             %(decl)s
+
             void cppy_new();
             void cppy_free();
             void cppy_copy(%(struct_name)s* copy);
@@ -231,6 +232,8 @@ class Class(CodeObject):
             "tp_methods": self.method_struct_name,
             "tp_new": self.class_new_func_name
         })
+        if self.bases:
+            dic.update({ "tp_base": "&" + self.bases[0].type_struct_name })
         for i in TYPE_FUNCS:
             if self.has_function(i[0]):
                 dic.update({i[1]: self.get_function(i[0]).func_name})
@@ -242,6 +245,7 @@ class Class(CodeObject):
             dic.update({"tp_getset": self.getset_struct_name})
 
         return self.format_code(
+                "/* https://docs.python.org/3/c-api/typeobj.html */\n" +
                 render_struct("PyTypeObject", PyTypeObject,
                              self.type_struct_name, dic,
                              first_line="PyVarObject_HEAD_INIT(NULL, 0)") )

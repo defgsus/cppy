@@ -11,6 +11,9 @@ It then builds a python interpreter executable with the embedded module.
 You can also start the generated ./python-mod and play with an interactive 
 shell with the module compiled in.
 
+There is also a Qt project file to compile the program once cppy generated 
+the c-api files.
+
 The **py_utils.h/cpp** contains convenience functions to make CPython 
 programming less painful. It will probably be extended and become part of 
 the cppy package.

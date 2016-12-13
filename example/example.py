@@ -45,10 +45,12 @@ class Abel:
         // These are the C members of the class
         // (Since we are in 'C namespace' they are not constructed by default!)
         std::string* data;
+        long justice;
 
     _CPP_(NEW):
         // When object is created we have to initialize all members ourselves
         data = new std::string();
+        justice = 23;
         // template tags make life easier
         // $NAME() resolves to Abel or Kain, when Kain is derived from Abel
         CPPY_PRINT("NEW $NAME()");
@@ -88,26 +90,26 @@ class Abel:
         """
         Test for equality of content
         _CPP_:
-        if (!$IS_INSTANCE(arg1))
-        {
-            setPythonError(PyExc_TypeError, SStream() << "Expected $NAME(), got " << typeName(arg1));
-            return NULL;
-        }
-        return toPython(*self->data == *($CAST(arg1)->data));
+            if (!$IS_INSTANCE(arg1))
+            {
+                setPythonError(PyExc_TypeError, SStream() << "Expected $NAME(), got " << typeName(arg1));
+                return NULL;
+            }
+            return toPython(*self->data == *($CAST(arg1)->data));
         """
         pass
 
     def __repr__(self):
         """
         _CPP_:
-        return SStream() << "$NAME()@" << (void*)self;
+            return SStream() << "$NAME()@" << (void*)self;
         """
         pass
 
     def __str__(self):
         """
         _CPP_:
-        return SStream() << "$NAME()(\\"" << *self->data << "\\")";
+            return SStream() << "$NAME()(\\"" << *self->data << "\\")";
         """
         pass
 
@@ -116,7 +118,7 @@ class Abel:
         copy() -> Abel
         Returns a copy of the object
         _CPP_:
-        return (PyObject*)$COPY(self);
+            return (PyObject*)$COPY(self);
         """
         pass
 
@@ -125,9 +127,9 @@ class Abel:
         set(string) -> self
         Sets the contents of the object
         _CPP_:
-        if (!expectFromPython(arg1, self->data))
-            return NULL;
-        Py_RETURN_SELF;
+            if (!expectFromPython(arg1, self->data))
+                return NULL;
+            Py_RETURN_SELF;
         """
         pass
 
@@ -136,17 +138,29 @@ class Abel:
         """
         A property
         _CPP_:
-        // A property is like a normal class function in the c-api
-        return toPython((long)(size_t(self) % 23));
+            // A property getter is like a normal class function in the c-api
+            return toPython((long)(size_t(self) % 23));
         """
         pass
+
+    @property
+    def justice(self):
+        """
+        _CPP_:
+            return toPython(self->justice);
+        _CPP_(SET):
+            // Use ^ this annotation to implement the setter code
+            if (!expectFromPython(arg1, &self->justice))
+                return -1;
+            return 0; // setters have a special return type as well
+        """
 
     def get(self):
         """
         get() -> string
         Returns the contents as string
         _CPP_:
-        return toPython(*self->data);
+            return toPython(*self->data);
         """
 
     def spawn(self):
@@ -156,6 +170,7 @@ class Abel:
             auto k = $NEW(Kain);
             *k->data = "from_" + *self->data;
             k->setAbel(self);
+            // k is of type $STRUCT(Kain), we need to cast to PyObject* on return
             return (PyObject*)k;
         """
 

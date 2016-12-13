@@ -147,9 +147,9 @@ class Function(CodeObject):
         doc = ""
         if self.doc and self.is_normal_function():
             doc = 'static const char* %s_doc = "%s";\n' % (self.func_name, to_c_string(self.doc))
-        code = "/* %(src_pos)s */\n/* %(debug)s */\n%(doc)s" % {
+        code = "/* %(src_pos)s */\n%(doc)s" % {
             "src_pos": self.src_pos,
-            "debug": str(self.args),
+            # "debug": str(self.args),
             "doc": doc
         }
         func_type = FUNCNAME_TO_TYPE.get(self.name, "binaryfunc")
